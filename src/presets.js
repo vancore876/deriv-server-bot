@@ -1,0 +1,53 @@
+export const presets = {
+  aggressive: {
+    cooldownMs: 700,
+    fastEmaLength: 4,
+    slowEmaLength: 9,
+    confirmTicks: 2,
+    moveWindow: 4,
+    warmupTicks: 12,
+    emaGapThreshold: 0.01,
+    microMoveThreshold: 0.002,
+    pauseAfterLosses: 3,
+    pauseSeconds: 25,
+    maxLosses: 7,
+    maxTrades: 60,
+    reentryBlockSeconds: 20,
+    peakDrawdownLock: 1.2,
+    duration: 1
+  },
+  balanced: {
+    cooldownMs: 1200,
+    fastEmaLength: 5,
+    slowEmaLength: 12,
+    confirmTicks: 3,
+    moveWindow: 5,
+    warmupTicks: 18,
+    emaGapThreshold: 0.018,
+    microMoveThreshold: 0.004,
+    pauseAfterLosses: 2,
+    pauseSeconds: 45,
+    maxLosses: 5,
+    maxTrades: 35,
+    reentryBlockSeconds: 30,
+    peakDrawdownLock: 0.8,
+    duration: 3
+  },
+  defensive: {
+    cooldownMs: 1800,
+    fastEmaLength: 6,
+    slowEmaLength: 15,
+    confirmTicks: 4,
+    moveWindow: 6,
+    warmupTicks: 22,
+    emaGapThreshold: 0.025,
+    microMoveThreshold: 0.006,
+    pauseAfterLosses: 1,
+    pauseSeconds: 75,
+    maxLosses: 4,
+    maxTrades: 20,
+    reentryBlockSeconds: 45,
+    peakDrawdownLock: 0.5,
+    duration: 3
+  }
+};

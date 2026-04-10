@@ -1,0 +1,63 @@
+export const state = {
+  connected: false,
+  authorized: false,
+  running: false,
+  contractType: "rise_fall",
+  sizingMode: "fixed",
+
+  token: "",
+  appId: process.env.DERIV_APP_ID || "1089",
+
+  balance: 0,
+  sessionProfit: 0,
+  peakProfit: 0,
+  tradeCount: 0,
+  wins: 0,
+  losses: 0,
+  lossStreak: 0,
+  currentStake: 0.35,
+
+  tradeInProgress: false,
+  contractId: null,
+  lastTradeTime: 0,
+  pauseUntil: 0,
+  blockedUntil: 0,
+
+  ticks: [],
+  emaFast: null,
+  emaSlow: null,
+  emaFastHistory: [],
+  emaSlowHistory: [],
+
+  recentTrades: [],
+  lastSignalText: "-",
+  lastTradeMeta: null,
+
+  settings: {
+    market: "R_25",
+    baseStake: 0.35,
+    minStake: 0.35,
+    maxStake: 1.0,
+    winMultiplier: 1.05,
+    lossMultiplier: 0.85,
+    duration: 3,
+    durationUnit: "t",
+    currency: "USD",
+    cooldownMs: 1200,
+    stopLossPercent: 1,
+    takeProfitPercent: 2,
+    fastEmaLength: 5,
+    slowEmaLength: 12,
+    confirmTicks: 3,
+    moveWindow: 5,
+    warmupTicks: 18,
+    emaGapThreshold: 0.018,
+    microMoveThreshold: 0.004,
+    pauseAfterLosses: 2,
+    pauseSeconds: 45,
+    maxLosses: 5,
+    maxTrades: 35,
+    reentryBlockSeconds: 30,
+    peakDrawdownLock: 0.8
+  }
+};
