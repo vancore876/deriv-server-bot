@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Dashboard</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <style>
+    .actionGrid {
+      display: grid;
+      gap: 8px;
+    }
+
+    .actionGrid button {
+      margin-bottom: 6px;
+    }
+
+    .status-active {
+      color: #4ade80;
+      font-weight: bold;
+    }
+
+    .status-disabled,
+    .status-expired {
+      color: #fb7185;
+      font-weight: bold;
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+
+    .toolbar button {
+      width: auto;
+      min-width: 160px;
+    }
+
+    .adminTopCard {
+      margin-bottom: 16px;
+    }
+
+    @media (max-width: 900px) {
+      .toolbar {
+        display: grid;
+      }
+
+      .toolbar button {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="hero">
+      <h1>Admin Dashboard 👑</h1>
+      <p>Manage users, access time limits, account status, and forced logouts.</p>
+    </div>
+
+    <div class="card glass adminTopCard">
+      <div class="toolbar">
+        <button id="backBtn" class="secondaryBtn">Back to Bot</button>
+        <button id="refreshBtn" class="secondaryBtn">Refresh Users</button>
+        <button id="logoutBtn" class="dangerBtn">Logout</button>
+      </div>
+
+      <pre id="adminMessage">Ready...</pre>
+    </div>
+
+    <div class="card glass adminTopCard">
+      <h3>Create User</h3>
+
+      <div class="settingsGrid">
+        <div class="settingBox">
+          <label for="newUsername">Username</label>
+          <input id="newUsername" type="text" placeholder="username" />
+        </div>
+
+        <div class="settingBox">
+          <label for="newPassword">Password</label>
+          <input id="newPassword" type="password" placeholder="password" />
+        </div>
+
+        <div class="settingBox">
+          <label for="newRole">Role</label>
+          <select id="newRole">
+            <option value="user" selected>User</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+
+        <div class="settingBox">
+          <label for="newExpiresAt">Expires At</label>
+          <input id="newExpiresAt" type="datetime-local" />
+        </div>
+      </div>
+
+      <div class="row">
+        <button id="createUserBtn" class="primaryBtn">Create User</button>
+        <button id="clearCreateBtn" class="secondaryBtn">Clear Form</button>
+      </div>
+    </div>
+
+    <div class="card glass">
+      <h3>Users</h3>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Username</th>
+            <th>Role</th>
+            <th>Status</th>
+            <th>Expires</th>
+            <th>Created</th>
+            <th>Last Login</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="usersTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    const usersTableBody = document.getElementById("usersTableBody");
+    const adminMessage = document.getElementById("adminMessage");
+
+    const newUsername = document.getElementById("newUsername");
+    const newPassword = document.getElementById("newPassword");
+    const newRole = document.getElementById("newRole");
+    const newExpiresAt = document.getElementById("newExpiresAt");
+
+    function say(message) {
+      adminMessage.textContent = message;
+    }
+
+    function formatDate(value) {
+      if (!value) return "-";
+      const d = new Date(value);
+      if (Number.isNaN(d.getTime())) return value;
+      return d.toLocaleString();
+    }
+
+    function statusText(user) {
+      if (user.isDisabled) return "Disabled";
+      if (user.isExpired) return "Expired";
+      return "Active";
+    }
+
+    function statusClass(user) {
+      if (user.isDisabled) return "status-disabled";
+      if (user.isExpired) return "status-expired";
+      return "status-active";
+    }
+
+    function clearCreateForm() {
+      newUsername.value = "";
+      newPassword.value = "";
+      newRole.value = "user";
+      newExpiresAt.value = "";
+    }
+
+    async function api(url, method = "GET", body = null) {
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: body ? JSON.stringify(body) : null
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        if (res.status === 401 || res.status === 403) {
+          window.location.href = "/login";
+          return null;
+        }
+        throw new Error(data.error || "Request failed");
+      }
+
+      return data;
+    }
+
+    async function loadUsers() {
+      try {
+        const data = await api("/api/admin/users");
+        if (!data) return;
+
+        usersTableBody.innerHTML = "";
+
+        for (const user of data.users) {
+          const tr = document.createElement("tr");
+
+          tr.innerHTML = `
+            <td>${user.username}</td>
+            <td>${user.role}</td>
+            <td class="${statusClass(user)}">${statusText(user)}</td>
+            <td>${formatDate(user.expiresAt)}</td>
+            <td>${formatDate(user.createdAt)}</td>
+            <td>${formatDate(user.lastLoginAt)}</td>
+            <td>
+              <div class="actionGrid">
+                <button onclick="extendUser('${user.username}', 1)" class="secondaryBtn">+1 day</button>
+                <button onclick="extendUser('${user.username}', 7)" class="secondaryBtn">+7 days</button>
+                <button onclick="extendUser('${user.username}', 30)" class="secondaryBtn">+30 days</button>
+                <button onclick="clearExpiry('${user.username}')" class="secondaryBtn">No Expiry</button>
+                <button onclick="toggleDisable('${user.username}', ${user.isDisabled ? "false" : "true"})" class="dangerBtn">
+                  ${user.isDisabled ? "Enable" : "Disable"}
+                </button>
+                <button onclick="forceLogout('${user.username}')" class="secondaryBtn">Force Logout</button>
+                <button onclick="deleteUserAccount('${user.username}')" class="dangerBtn">Delete</button>
+              </div>
+            </td>
+          `;
+
+          usersTableBody.appendChild(tr);
+        }
+
+        say(`Loaded ${data.users.length} user(s)`);
+      } catch (err) {
+        say(err.message);
+      }
+    }
+
+    async function extendUser(username, days) {
+      try {
+        const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+
+        await api("/api/admin/users/update", "POST", {
+          username,
+          expiresAt,
+          isDisabled: false
+        });
+
+        say(`Updated ${username}: +${days} day(s)`);
+        loadUsers();
+      } catch (err) {
+        say(err.message);
+      }
+    }
+
+    async function clearExpiry(username) {
+      try {
+        await api("/api/admin/users/update", "POST", {
+          username,
+          expiresAt: null
+        });
+
+        say(`Cleared expiry for ${username}`);
+        loadUsers();
+      } catch (err) {
+        say(err.message);
+      }
+    }
+
+    async function toggleDisable(username, isDisabled) {
+      try {
+        await api("/api/admin/users/update", "POST", {
+          username,
+          isDisabled
+        });
+
+        say(`${isDisabled ? "Disabled" : "Enabled"} ${username}`);
+        loadUsers();
+      } catch (err) {
+        say(err.message);
+      }
+    }
+
+    async function forceLogout(username) {
+      try {
+        await api("/api/admin/users/force-logout", "POST", { username });
+        say(`Forced logout for ${username}`);
+        loadUsers();
+      } catch (err) {
+        say(err.message);
+      }
+    }
+
+    async function deleteUserAccount(username) {
+      const confirmed = confirm(`Delete ${username}?`);
+      if (!confirmed) return;
+
+      try {
+        await api("/api/admin/users/delete", "POST", { username });
+        say(`Deleted ${username}`);
+        loadUsers();
+      } catch (err) {
+        say(err.message);
+      }
+    }
+
+    document.getElementById("createUserBtn").addEventListener("click", async () => {
+      try {
+        const username = newUsername.value.trim();
+        const password = newPassword.value;
+        const role = newRole.value;
+        const rawExpires = newExpiresAt.value;
+        const expiresAt = rawExpires ? new Date(rawExpires).toISOString() : null;
+
+        await api("/api/admin/users", "POST", {
+          username,
+          password,
+          role,
+          expiresAt
+        });
+
+        say(`Created ${username}`);
+        clearCreateForm();
+        loadUsers();
+      } catch (err) {
+        say(err.message);
+      }
+    });
+
+    document.getElementById("clearCreateBtn").addEventListener("click", () => {
+      clearCreateForm();
+      say("Create form cleared");
+    });
+
+    document.getElementById("refreshBtn").addEventListener("click", loadUsers);
+
+    document.getElementById("backBtn").addEventListener("click", () => {
+      window.location.href = "/";
+    });
+
+    document.getElementById("logoutBtn").addEventListener("click", async () => {
+      await fetch("/auth/logout", { method: "POST" });
+      window.location.href = "/login";
+    });
+
+    loadUsers();
+
+    window.extendUser = extendUser;
+    window.clearExpiry = clearExpiry;
+    window.toggleDisable = toggleDisable;
+    window.forceLogout = forceLogout;
+    window.deleteUserAccount = deleteUserAccount;
+  </script>
+</body>
+</html>

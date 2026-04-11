@@ -32,6 +32,8 @@ const peakDrawdownLockInput = document.getElementById("peakDrawdownLock");
 
 const connectBtn = document.getElementById("connectBtn");
 const disconnectBtn = document.getElementById("disconnectBtn");
+const logoutBtn = document.getElementById("logoutBtn");
+const adminBtn = document.getElementById("adminBtn");
 const applyPresetBtn = document.getElementById("applyPresetBtn");
 const startTicksBtn = document.getElementById("startTicksBtn");
 const startBotBtn = document.getElementById("startBotBtn");
@@ -40,6 +42,7 @@ const resetSessionBtn = document.getElementById("resetSessionBtn");
 const resetLogsBtn = document.getElementById("resetLogsBtn");
 const saveSettingsBtn = document.getElementById("saveSettingsBtn");
 const loadMarketBtn = document.getElementById("loadMarketBtn");
+const manualBtn = document.getElementById("manualBtn");
 
 const tickOutput = document.getElementById("tickOutput");
 const snapshotOutput = document.getElementById("snapshotOutput");
@@ -54,6 +57,7 @@ const balanceValue = document.getElementById("balanceValue");
 const sessionProfitValue = document.getElementById("sessionProfitValue");
 const peakProfitValue = document.getElementById("peakProfitValue");
 const moveValue = document.getElementById("moveValue");
+const countdownValue = document.getElementById("countdownValue");
 const tradesValue = document.getElementById("tradesValue");
 const winsValue = document.getElementById("winsValue");
 const lossesValue = document.getElementById("lossesValue");
@@ -79,6 +83,10 @@ const TICKS_PER_CANDLE_MINI = 5;
 
 let allowSettingsSync = true;
 let lastSyncedSettingsJson = "";
+let expiresAtValue = null;
+let countdownInterval = null;
+
+adminBtn.style.display = "none";
 
 const allSettingInputs = [
   baseStakeInput,
@@ -114,6 +122,70 @@ allSettingInputs.forEach((el) => {
   });
 });
 
+function startCountdown() {
+  if (countdownInterval) clearInterval(countdownInterval);
+
+  const render = () => {
+    if (!expiresAtValue) {
+      countdownValue.textContent = "No limit";
+      countdownValue.className = "value";
+      return;
+    }
+
+    const target = new Date(expiresAtValue).getTime();
+    const diff = target - Date.now();
+
+    if (diff <= 0) {
+      countdownValue.textContent = "Expired";
+      countdownValue.className = "value bad";
+      return;
+    }
+
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
+    const minutes = Math.floor((diff / (1000 * 60)) % 60);
+    const seconds = Math.floor((diff / 1000) % 60);
+
+    countdownValue.textContent = `${days}d ${hours}h ${minutes}m ${seconds}s`;
+    countdownValue.className = "value good";
+  };
+
+  render();
+  countdownInterval = setInterval(render, 1000);
+}
+
+async function checkAuth() {
+  try {
+    const res = await fetch("/auth/status");
+    const data = await res.json();
+
+    if (!data.loggedIn) {
+      window.location.href = "/login";
+      return;
+    }
+
+    expiresAtValue = data.expiresAt || null;
+    startCountdown();
+  } catch {
+    window.location.href = "/login";
+  }
+}
+
+async function loadRole() {
+  try {
+    const res = await fetch("/auth/status");
+    const data = await res.json();
+
+    if (data.role === "admin") {
+      adminBtn.style.display = "block";
+    } else {
+      adminBtn.style.display = "none";
+    }
+  } catch {
+    adminBtn.style.display = "none";
+  }
+}
+
 function addLog(message) {
   const now = new Date().toLocaleTimeString();
   logOutput.textContent = `[${now}] ${message}\n` + logOutput.textContent;
@@ -121,6 +193,7 @@ function addLog(message) {
 
 function syncSettingsFromSnapshot(settings) {
   if (!settings || !allowSettingsSync) return;
+
   const json = JSON.stringify(settings);
   if (json === lastSyncedSettingsJson) return;
 
@@ -179,6 +252,7 @@ function updateStats(snapshot) {
 
 function renderTrades(trades) {
   tradesTableBody.innerHTML = "";
+
   for (const trade of trades) {
     const tr = document.createElement("tr");
     tr.innerHTML = `
@@ -217,8 +291,8 @@ function pushCandle(candles, price, ticksPerCandle, maxCandles) {
 
 function drawCandles(canvas, candles) {
   const ctx = canvas.getContext("2d");
-  const width = (canvas.width = canvas.clientWidth);
-  const height = (canvas.height = canvas.clientHeight);
+  const width = canvas.width = canvas.clientWidth;
+  const height = canvas.height = canvas.clientHeight;
 
   ctx.clearRect(0, 0, width, height);
   if (candles.length < 2) return;
@@ -298,7 +372,6 @@ function getSettingsPayload() {
     currency: currencyInput.value,
     winMultiplier: Number(winMultiplierInput.value),
     lossMultiplier: Number(lossMultiplierInput.value),
-
     cooldownMs: Number(cooldownMsInput.value),
     fastEmaLength: Number(fastEmaInput.value),
     slowEmaLength: Number(slowEmaInput.value),
@@ -307,7 +380,6 @@ function getSettingsPayload() {
     warmupTicks: Number(warmupTicksInput.value),
     emaGapThreshold: Number(emaGapThresholdInput.value),
     microMoveThreshold: Number(microMoveThresholdInput.value),
-
     stopLossPercent: Number(stopLossInput.value),
     takeProfitPercent: Number(takeProfitInput.value),
     pauseAfterLosses: Number(pauseAfterLossesInput.value),
@@ -356,7 +428,12 @@ connectBtn.addEventListener("click", async () => {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ token: tokenInput.value })
   });
+
   addLog("Connect requested");
+});
+
+manualBtn.addEventListener("click", () => {
+  window.location.href = "/manual";
 });
 
 disconnectBtn.addEventListener("click", async () => {
@@ -364,19 +441,31 @@ disconnectBtn.addEventListener("click", async () => {
   addLog("Disconnect requested");
 });
 
+logoutBtn.addEventListener("click", async () => {
+  await fetch("/auth/logout", { method: "POST" });
+  window.location.href = "/login";
+});
+
+adminBtn.addEventListener("click", () => {
+  window.location.href = "/admin";
+});
+
 applyPresetBtn.addEventListener("click", async () => {
   allowSettingsSync = true;
+
   await fetch("/api/preset", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ preset: presetSelect.value })
   });
+
   addLog(`Preset applied: ${presetSelect.value}`);
 });
 
 saveSettingsBtn.addEventListener("click", async () => {
   allowSettingsSync = true;
   lastSyncedSettingsJson = "";
+
   await fetch("/api/settings", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -385,6 +474,7 @@ saveSettingsBtn.addEventListener("click", async () => {
       settings: getSettingsPayload()
     })
   });
+
   addLog("Settings saved");
 });
 
@@ -463,6 +553,7 @@ document.querySelectorAll(".tabBtn").forEach((btn) => {
   btn.addEventListener("click", () => {
     document.querySelectorAll(".tabBtn").forEach((b) => b.classList.remove("active"));
     document.querySelectorAll(".tabPanel").forEach((p) => p.classList.remove("active"));
+
     btn.classList.add("active");
     document.getElementById(btn.dataset.tab).classList.add("active");
   });
@@ -472,3 +563,6 @@ window.addEventListener("resize", () => {
   drawMainChart();
   drawMiniCharts();
 });
+
+checkAuth();
+loadRole();

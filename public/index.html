@@ -11,7 +11,7 @@
     <div class="hero">
       <div>
         <h1>Deriv Server Bot ✨</h1>
-        <p>Live dashboard with backend bot control, charts, trade tracking, P&amp;L, and reset tools.</p>
+        <p>Live dashboard with private user session, charts, trade tracking, P&amp;L, and reset tools.</p>
       </div>
     </div>
 
@@ -20,9 +20,20 @@
         <h3>Connection</h3>
         <label for="token">Deriv API Token</label>
         <input id="token" type="password" placeholder="Enter Deriv API token" />
+
         <div class="row">
           <button id="connectBtn" class="primaryBtn">Connect</button>
           <button id="disconnectBtn" class="dangerBtn">Disconnect</button>
+        </div>
+
+        <div class="row">
+          <button id="logoutBtn" class="secondaryBtn">Logout</button>
+          <button id="manualBtn" class="secondaryBtn">Manual</button>
+        </div>
+
+        <div class="row">
+          <button id="adminBtn" class="secondaryBtn">Admin Panel</button>
+          <div></div>
         </div>
       </div>
 
@@ -83,18 +94,22 @@
             <label for="baseStake">Base Stake (USD)</label>
             <input id="baseStake" type="number" step="0.01" value="0.35" />
           </div>
+
           <div class="settingBox">
             <label for="minStake">Minimum Stake</label>
             <input id="minStake" type="number" step="0.01" value="0.35" />
           </div>
+
           <div class="settingBox">
             <label for="maxStake">Maximum Stake</label>
             <input id="maxStake" type="number" step="0.01" value="1.00" />
           </div>
+
           <div class="settingBox">
             <label for="duration">Duration</label>
             <input id="duration" type="number" step="1" value="3" />
           </div>
+
           <div class="settingBox">
             <label for="durationUnit">Duration Unit</label>
             <select id="durationUnit">
@@ -103,14 +118,17 @@
               <option value="m">Minutes</option>
             </select>
           </div>
+
           <div class="settingBox">
             <label for="currency">Currency</label>
             <input id="currency" type="text" value="USD" />
           </div>
+
           <div class="settingBox">
             <label for="winMultiplier">Win Multiplier</label>
             <input id="winMultiplier" type="number" step="0.01" value="1.05" />
           </div>
+
           <div class="settingBox">
             <label for="lossMultiplier">Loss Multiplier</label>
             <input id="lossMultiplier" type="number" step="0.01" value="0.85" />
@@ -124,30 +142,37 @@
             <label for="cooldownMs">Cooldown (ms)</label>
             <input id="cooldownMs" type="number" step="100" value="1200" />
           </div>
+
           <div class="settingBox">
             <label for="fastEma">Fast EMA</label>
             <input id="fastEma" type="number" step="1" value="5" />
           </div>
+
           <div class="settingBox">
             <label for="slowEma">Slow EMA</label>
             <input id="slowEma" type="number" step="1" value="12" />
           </div>
+
           <div class="settingBox">
             <label for="confirmTicks">Confirm Moves</label>
             <input id="confirmTicks" type="number" step="1" value="3" />
           </div>
+
           <div class="settingBox">
             <label for="moveWindow">Move Window</label>
             <input id="moveWindow" type="number" step="1" value="5" />
           </div>
+
           <div class="settingBox">
             <label for="warmupTicks">Warmup Ticks</label>
             <input id="warmupTicks" type="number" step="1" value="18" />
           </div>
+
           <div class="settingBox">
             <label for="emaGapThreshold">EMA Gap Threshold</label>
             <input id="emaGapThreshold" type="number" step="0.001" value="0.018" />
           </div>
+
           <div class="settingBox">
             <label for="microMoveThreshold">Micro Move Threshold</label>
             <input id="microMoveThreshold" type="number" step="0.001" value="0.004" />
@@ -161,30 +186,37 @@
             <label for="stopLoss">Daily Stop Loss %</label>
             <input id="stopLoss" type="number" step="0.1" value="1" />
           </div>
+
           <div class="settingBox">
             <label for="takeProfit">Daily Take Profit %</label>
             <input id="takeProfit" type="number" step="0.1" value="2" />
           </div>
+
           <div class="settingBox">
             <label for="pauseAfterLosses">Pause After Loss Streak</label>
             <input id="pauseAfterLosses" type="number" step="1" value="2" />
           </div>
+
           <div class="settingBox">
             <label for="pauseSeconds">Pause Length (seconds)</label>
             <input id="pauseSeconds" type="number" step="1" value="45" />
           </div>
+
           <div class="settingBox">
             <label for="maxLosses">Hard Stop After Losses</label>
             <input id="maxLosses" type="number" step="1" value="5" />
           </div>
+
           <div class="settingBox">
             <label for="maxTrades">Max Trades Per Session</label>
             <input id="maxTrades" type="number" step="1" value="35" />
           </div>
+
           <div class="settingBox">
             <label for="reentryBlockSeconds">Re-entry Block (seconds)</label>
             <input id="reentryBlockSeconds" type="number" step="1" value="30" />
           </div>
+
           <div class="settingBox">
             <label for="peakDrawdownLock">Drawdown Lock</label>
             <input id="peakDrawdownLock" type="number" step="0.01" value="0.80" />
@@ -207,6 +239,7 @@
       <div class="statCard glass"><div class="label">Session P&amp;L</div><div class="value" id="sessionProfitValue">0.00</div></div>
       <div class="statCard glass"><div class="label">Peak P&amp;L</div><div class="value" id="peakProfitValue">0.00</div></div>
       <div class="statCard glass"><div class="label">Move %</div><div class="value" id="moveValue">0.000%</div></div>
+      <div class="statCard glass"><div class="label">Access Timer</div><div class="value" id="countdownValue">No limit</div></div>
       <div class="statCard glass"><div class="label">Trades</div><div class="value" id="tradesValue">0</div></div>
       <div class="statCard glass"><div class="label">Wins</div><div class="value good" id="winsValue">0</div></div>
       <div class="statCard glass"><div class="label">Losses</div><div class="value bad" id="lossesValue">0</div></div>

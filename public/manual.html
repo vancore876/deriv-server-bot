@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bot Manual</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <style>
+    .manualCard {
+      margin-bottom: 16px;
+    }
+
+    .manualCard p,
+    .manualCard li {
+      color: #e2e8f0;
+      line-height: 1.6;
+    }
+
+    .manualCard h3 {
+      margin-top: 0;
+    }
+
+    .manualList {
+      padding-left: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="hero">
+      <h1>User Manual 📘</h1>
+      <p>How to use the dashboard and where to find your Deriv API token.</p>
+    </div>
+
+    <div class="card glass manualCard">
+      <div class="row">
+        <button id="backBtn" class="secondaryBtn">Back to Dashboard</button>
+        <button id="logoutBtn" class="dangerBtn">Logout</button>
+      </div>
+    </div>
+
+    <div class="card glass manualCard">
+      <h3>What this dashboard does</h3>
+      <ul class="manualList">
+        <li>Connects your Deriv account with your API token</li>
+        <li>Shows live ticks and charts</li>
+        <li>Lets you run the bot on your own private account session</li>
+        <li>Shows P&amp;L, wins, losses, trades, and current stake</li>
+        <li>Shows your access timer if admin set an expiry date</li>
+      </ul>
+    </div>
+
+    <div class="card glass manualCard">
+      <h3>How to find your Deriv API token</h3>
+      <ol class="manualList">
+        <li>Log in to your Deriv account</li>
+        <li>Open the Deriv API area / token manager</li>
+        <li>Go to <strong>Manage Tokens</strong> or <strong>API Token Manager</strong></li>
+        <li>Create a token with the scopes needed for trading and account use</li>
+        <li>Copy that token and paste it into this dashboard</li>
+      </ol>
+      <p>Use only the permissions you actually need. Test with demo first.</p>
+    </div>
+
+    <div class="card glass manualCard">
+      <h3>How to start the bot</h3>
+      <ol class="manualList">
+        <li>Paste your Deriv API token</li>
+        <li>Click <strong>Connect</strong></li>
+        <li>Select a market</li>
+        <li>Click <strong>Start Ticks</strong></li>
+        <li>Wait for candles to appear</li>
+        <li>Adjust settings if needed</li>
+        <li>Click <strong>Start Bot</strong></li>
+      </ol>
+    </div>
+
+    <div class="card glass manualCard">
+      <h3>What the buttons do</h3>
+      <ul class="manualList">
+        <li><strong>Connect</strong> — connects your Deriv session</li>
+        <li><strong>Disconnect</strong> — disconnects your Deriv session</li>
+        <li><strong>Start Ticks</strong> — starts live market data</li>
+        <li><strong>Start Bot</strong> — starts automated trading logic</li>
+        <li><strong>Stop Bot</strong> — stops new automated trades</li>
+        <li><strong>Reset Session</strong> — clears session stats and recent trades</li>
+        <li><strong>Clear Log</strong> — clears the visible log box only</li>
+      </ul>
+    </div>
+
+    <div class="card glass manualCard">
+      <h3>What the stats mean</h3>
+      <ul class="manualList">
+        <li><strong>Balance</strong> — your Deriv balance from the connected session</li>
+        <li><strong>Session P&amp;L</strong> — profit/loss for the current session</li>
+        <li><strong>Peak P&amp;L</strong> — highest session P&amp;L reached</li>
+        <li><strong>Move %</strong> — chart movement from the first visible candle to the latest candle</li>
+        <li><strong>Access Timer</strong> — how long your account access remains</li>
+      </ul>
+    </div>
+
+    <div class="card glass manualCard">
+      <h3>Important safety notes</h3>
+      <ul class="manualList">
+        <li>Start on demo first</li>
+        <li>Do not share your Deriv token</li>
+        <li>Use the smallest safe stake while testing</li>
+        <li>If your token is exposed, revoke it and make a new one</li>
+      </ul>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById("backBtn").addEventListener("click", () => {
+      window.location.href = "/";
+    });
+
+    document.getElementById("logoutBtn").addEventListener("click", async () => {
+      await fetch("/auth/logout", { method: "POST" });
+      window.location.href = "/login";
+    });
+  </script>
+</body>
+</html>

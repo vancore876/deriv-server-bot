@@ -1,11 +1,21 @@
 import express from "express";
 import dotenv from "dotenv";
 import path from "path";
+import session from "express-session";
 import { fileURLToPath } from "url";
-import { state } from "./state.js";
+import {
+  createUser,
+  verifyUser,
+  listUsers,
+  getUser,
+  updateUser,
+  deleteUser,
+  listSafeUsers,
+  isBlocked
+} from "./authStore.js";
+import { getUserBot } from "./botRegistry.js";
 import { presets } from "./presets.js";
-import { initDerivClient, connectDeriv, sendToDeriv, closeDeriv } from "./derivClient.js";
-import { handleTickForBot, resetStake, applyStakeResult } from "./botEngine.js";
+
 dotenv.config();
 
 const app = express();
@@ -13,330 +23,367 @@ const PORT = process.env.PORT || 3000;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const PUBLIC_DIR = path.join(__dirname, "..", "public");
 
 app.use(express.json());
-app.use(express.static(path.join(__dirname, "..", "public")));
+app.use(express.urlencoded({ extended: true }));
 
-let clients = [];
-let socketReady = false;
-let wantedMarket = "R_25";
-const MINI_MARKETS = ["R_10", "R_25", "R_50"];
-
-function broadcast(data) {
-  const payload = JSON.stringify(data);
-  clients = clients.filter((res) => {
-    try {
-      res.write(`data: ${payload}\n\n`);
-      return true;
-    } catch {
-      return false;
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET || "change-this-secret-now",
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: false,
+      maxAge: 1000 * 60 * 60 * 24 * 7
     }
-  });
-}
+  })
+);
 
-function snapshot() {
-  return {
-    connected: state.connected,
-    authorized: state.authorized,
-    running: state.running,
-    market: state.settings.market,
-    signal: state.lastSignalText,
-    balance: state.balance,
-    sessionProfit: state.sessionProfit,
-    peakProfit: state.peakProfit,
-    tradeCount: state.tradeCount,
-    wins: state.wins,
-    losses: state.losses,
-    lossStreak: state.lossStreak,
-    currentStake: state.currentStake,
-    contractType: state.contractType,
-    sizingMode: state.sizingMode,
-    settings: state.settings,
-    recentTrades: state.recentTrades.slice(0, 20)
-  };
-}
+function requireAuth(req, res, next) {
+  const username = req.session?.user?.username;
+  if (!username) return res.redirect("/login");
 
-function subscribeAllNeededTicks() {
-  if (!socketReady) return;
-  const allMarkets = [...new Set([wantedMarket, ...MINI_MARKETS])];
-  for (const symbol of allMarkets) {
-    sendToDeriv({ ticks: symbol, subscribe: 1 });
-    broadcast({ type: "log", message: `Subscribed to ${symbol}` });
+  const user = getUser(username);
+  if (!user || isBlocked(user)) {
+    req.session.destroy(() => res.redirect("/login"));
+    return;
   }
+
+  if ((user.sessionVersion || 1) !== (req.session.user.sessionVersion || 1)) {
+    req.session.destroy(() => res.redirect("/login"));
+    return;
+  }
+
+  req.currentUser = user;
+  next();
 }
 
-function buildContractType(signal) {
-  return signal;
+function requireApiAuth(req, res, next) {
+  const username = req.session?.user?.username;
+  if (!username) return res.status(401).json({ ok: false, error: "Unauthorized" });
+
+  const user = getUser(username);
+  if (!user || isBlocked(user)) {
+    req.session.destroy(() => {
+      res.status(403).json({ ok: false, error: "Account disabled or expired" });
+    });
+    return;
+  }
+
+  if ((user.sessionVersion || 1) !== (req.session.user.sessionVersion || 1)) {
+    req.session.destroy(() => {
+      res.status(403).json({ ok: false, error: "Session expired" });
+    });
+    return;
+  }
+
+  req.currentUser = user;
+  next();
 }
 
-initDerivClient({
-  derivAppId: process.env.DERIV_APP_ID || "1089",
-  onStatus: (msg) => {
-    state.connected = msg === "connected";
-    socketReady = msg === "connected";
+function requireAdmin(req, res, next) {
+  if (!req.currentUser || req.currentUser.role !== "admin") {
+    return res.status(403).json({ ok: false, error: "Admin only" });
+  }
+  next();
+}
 
-    if (msg === "connected") {
-      broadcast({ type: "log", message: "Deriv socket connected" });
-      if (state.token) {
-        sendToDeriv({ authorize: state.token });
-      } else {
-        subscribeAllNeededTicks();
-      }
+function redirectIfLoggedIn(req, res, next) {
+  if (req.session?.user?.username) return res.redirect("/");
+  next();
+}
+
+app.get("/login", redirectIfLoggedIn, (req, res) => {
+  res.sendFile(path.join(PUBLIC_DIR, "login.html"));
+});
+
+app.get("/signup", redirectIfLoggedIn, (req, res) => {
+  res.sendFile(path.join(PUBLIC_DIR, "signup.html"));
+});
+
+app.get("/admin", requireAuth, (req, res) => {
+  if (req.currentUser.role !== "admin") return res.redirect("/");
+  res.sendFile(path.join(PUBLIC_DIR, "admin.html"));
+});
+
+app.get("/manual", requireAuth, (req, res) => {
+  res.sendFile(path.join(PUBLIC_DIR, "manual.html"));
+});
+
+app.post("/auth/signup", redirectIfLoggedIn, async (req, res) => {
+  try {
+    const username = String(req.body.username || "").trim();
+    const password = String(req.body.password || "");
+
+    if (!username || !password) {
+      return res.status(400).json({ ok: false, error: "Username and password are required" });
     }
 
-    if (msg === "closed") {
-      socketReady = false;
-      state.authorized = false;
-      state.running = false;
-      broadcast({ type: "log", message: "Deriv socket closed" });
+    if (password.length < 6) {
+      return res.status(400).json({ ok: false, error: "Password must be at least 6 characters" });
     }
 
-    broadcast({ type: "snapshot", data: snapshot() });
-  },
-  onError: (message) => {
-    broadcast({ type: "error", message });
-  },
-  onMessage: (data) => {
-    if (data.error) {
-      broadcast({ type: "error", message: `${data.error.code}: ${data.error.message}` });
-      state.tradeInProgress = false;
-      return;
-    }
+    const role = listUsers().length === 0 || username === "vancore36" ? "admin" : "user";
+    const user = await createUser(username, password, { role });
 
-    if (data.msg_type === "authorize" && data.authorize) {
-      state.authorized = true;
-      state.balance = Number(data.authorize.balance || 0);
-      broadcast({ type: "log", message: "Authorized with Deriv" });
-      subscribeAllNeededTicks();
-      broadcast({ type: "snapshot", data: snapshot() });
-      return;
-    }
+    req.session.user = {
+      username: user.username,
+      role: user.role,
+      sessionVersion: 1
+    };
 
-    if (data.msg_type === "tick" && data.tick) {
-      const price = Number(data.tick.quote);
-      const symbol = data.tick.symbol;
-
-      broadcast({
-        type: "tick",
-        symbol,
-        quote: price,
-        epoch: data.tick.epoch
-      });
-
-      if (symbol === state.settings.market) {
-        const signal = handleTickForBot(state, price);
-        broadcast({ type: "snapshot", data: snapshot() });
-
-        if (signal && !state.tradeInProgress && state.running) {
-          state.tradeInProgress = true;
-          state.lastTradeTime = Date.now();
-          state.tradeCount += 1;
-
-          const stakeUsed = Number(state.currentStake);
-          const contractType = buildContractType(signal);
-
-          state.lastTradeMeta = {
-            time: new Date().toLocaleTimeString(),
-            timestamp: Date.now(),
-            direction: signal,
-            contractType,
-            stake: stakeUsed,
-            signalReason: state.lastSignalText,
-            market: state.settings.market
-          };
-
-          sendToDeriv({
-            buy: 1,
-            price: stakeUsed,
-            parameters: {
-              amount: stakeUsed,
-              basis: "stake",
-              contract_type: contractType,
-              currency: state.settings.currency,
-              duration: state.settings.duration,
-              duration_unit: state.settings.durationUnit,
-              symbol: state.settings.market
-            }
-          });
-
-          broadcast({
-            type: "log",
-            message: `Trade sent: ${signal} | Stake ${stakeUsed.toFixed(2)} | ${state.lastSignalText}`
-          });
-
-          broadcast({ type: "snapshot", data: snapshot() });
-        }
-      }
-      return;
-    }
-
-    if (data.msg_type === "buy" && data.buy?.contract_id) {
-      state.contractId = data.buy.contract_id;
-      sendToDeriv({
-        proposal_open_contract: 1,
-        contract_id: state.contractId,
-        subscribe: 1
-      });
-      broadcast({ type: "log", message: `Watching contract ${state.contractId}` });
-      return;
-    }
-
-    if (data.msg_type === "proposal_open_contract" && data.proposal_open_contract?.is_sold) {
-      const c = data.proposal_open_contract;
-      const profit = Number(c.profit || 0);
-      const result = profit > 0 ? "WIN" : "LOSS";
-
-      state.sessionProfit += profit;
-      state.peakProfit = Math.max(state.peakProfit, state.sessionProfit);
-      state.balance = Number(c.balance_after || state.balance);
-      state.tradeInProgress = false;
-      state.contractId = null;
-
-      if (result === "WIN") {
-        state.wins += 1;
-        state.lossStreak = 0;
-      } else {
-        state.losses += 1;
-        state.lossStreak += 1;
-        state.blockedUntil = Date.now() + state.settings.reentryBlockSeconds * 1000;
-        if (state.lossStreak >= state.settings.pauseAfterLosses) {
-          state.pauseUntil = Date.now() + state.settings.pauseSeconds * 1000;
-        }
-      }
-
-      const settledTrade = {
-        time: state.lastTradeMeta?.time || new Date().toLocaleTimeString(),
-        direction: state.lastTradeMeta?.direction || c.contract_type || "-",
-        contractType: state.lastTradeMeta?.contractType || c.contract_type || "-",
-        result,
-        profit,
-        stake: state.lastTradeMeta?.stake ?? state.currentStake,
-        market: state.lastTradeMeta?.market || state.settings.market,
-        reason: state.lastTradeMeta?.signalReason || "-"
-      };
-
-      state.recentTrades.unshift(settledTrade);
-      state.recentTrades = state.recentTrades.slice(0, 20);
-
-      applyStakeResult(state, result);
-
-      broadcast({
-        type: "log",
-        message: `Trade settled: ${result} | Profit ${profit.toFixed(2)} | Session P&L ${state.sessionProfit.toFixed(2)}`
-      });
-
-      broadcast({ type: "snapshot", data: snapshot() });
-      return;
-    }
+    res.json({ ok: true, user });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
   }
 });
 
+app.post("/auth/login", redirectIfLoggedIn, async (req, res) => {
+  const username = String(req.body.username || "").trim();
+  const password = String(req.body.password || "");
+
+  const user = await verifyUser(username, password);
+
+  if (!user) {
+    return res.status(401).json({ ok: false, error: "Invalid username or password" });
+  }
+
+  if (user.blocked) {
+    return res.status(403).json({ ok: false, error: "Account disabled or expired" });
+  }
+
+  req.session.user = {
+    username: user.username,
+    role: user.role || "user",
+    sessionVersion: user.sessionVersion || 1
+  };
+
+  res.json({ ok: true, user });
+});
+
+app.post("/auth/logout", (req, res) => {
+  req.session.destroy(() => res.json({ ok: true }));
+});
+
+app.get("/auth/status", (req, res) => {
+  const username = req.session?.user?.username || null;
+  const user = username ? getUser(username) : null;
+
+  res.json({
+    ok: true,
+    loggedIn: Boolean(username && user && !isBlocked(user)),
+    username,
+    role: user?.role || null,
+    expiresAt: user?.expiresAt || null,
+    isDisabled: Boolean(user?.isDisabled),
+    signupEnabled: true,
+    userCount: listUsers().length
+  });
+});
+
+app.get("/", requireAuth, (req, res) => {
+  res.sendFile(path.join(PUBLIC_DIR, "index.html"));
+});
+
+app.use(express.static(PUBLIC_DIR));
+app.use("/api", requireApiAuth);
+
+function currentBot(req) {
+  return getUserBot(req.currentUser.username);
+}
+
 app.get("/api/health", (req, res) => {
-  res.json({ ok: true, app: "deriv-server-bot", port: PORT });
+  res.json({
+    ok: true,
+    app: "deriv-multi-user-bot",
+    user: req.currentUser.username,
+    role: req.currentUser.role
+  });
 });
 
 app.get("/api/stream", (req, res) => {
+  const bot = currentBot(req);
+
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
 
-  clients.push(res);
-  res.write(`data: ${JSON.stringify({ type: "snapshot", data: snapshot() })}\n\n`);
+  const unsubscribe = bot.addListener((event) => {
+    res.write(`data: ${JSON.stringify(event)}\n\n`);
+  });
+
+  res.write(`data: ${JSON.stringify({ type: "snapshot", data: bot.session.snapshot() })}\n\n`);
 
   req.on("close", () => {
-    clients = clients.filter((client) => client !== res);
+    unsubscribe();
   });
 });
 
 app.post("/api/connect", (req, res) => {
-  const { token } = req.body;
-  state.token = token || "";
-  connectDeriv();
+  const bot = currentBot(req);
+  const token = String(req.body.token || "");
+  bot.session.connect(token);
   res.json({ ok: true });
 });
 
 app.post("/api/settings", (req, res) => {
-  state.settings = { ...state.settings, ...req.body.settings };
-  state.sizingMode = req.body.sizingMode || state.sizingMode;
-  state.contractType = req.body.contractType || state.contractType;
-  state.settings.market = req.body.settings?.market || state.settings.market;
-  wantedMarket = state.settings.market;
-
-  resetStake(state);
-  broadcast({ type: "snapshot", data: snapshot() });
-  res.json({ ok: true, settings: state.settings });
+  const bot = currentBot(req);
+  bot.session.updateSettings({
+    settings: req.body.settings || {},
+    sizingMode: req.body.sizingMode,
+    contractType: req.body.contractType
+  });
+  bot.session.broadcast("snapshot", { data: bot.session.snapshot() });
+  res.json({ ok: true, settings: bot.state.settings });
 });
 
 app.post("/api/preset", (req, res) => {
-  const { preset } = req.body;
-  if (!presets[preset]) {
-    return res.status(400).json({ ok: false, error: "Invalid preset" });
-  }
-  state.settings = { ...state.settings, ...presets[preset] };
-  resetStake(state);
-  broadcast({ type: "snapshot", data: snapshot() });
-  res.json({ ok: true, settings: state.settings });
+  const bot = currentBot(req);
+  const preset = presets[req.body.preset];
+  if (!preset) return res.status(400).json({ ok: false, error: "Invalid preset" });
+
+  bot.session.applyPreset(preset);
+  bot.session.broadcast("snapshot", { data: bot.session.snapshot() });
+  res.json({ ok: true, settings: bot.state.settings });
 });
 
 app.post("/api/ticks/start", (req, res) => {
-  const { symbol } = req.body;
-  wantedMarket = symbol || state.settings.market;
-  state.settings.market = wantedMarket;
-
-  if (!state.connected) {
-    return res.json({ ok: true, message: "Market saved; will subscribe after connect", symbol: wantedMarket });
-  }
-
-  subscribeAllNeededTicks();
-  res.json({ ok: true, symbol: wantedMarket });
+  const bot = currentBot(req);
+  const result = bot.session.startTicks(req.body.symbol);
+  res.json(result);
 });
 
 app.post("/api/bot/start", (req, res) => {
-  state.running = true;
-  state.tradeInProgress = false;
-  state.lossStreak = 0;
-  resetStake(state);
-
-  broadcast({ type: "log", message: "Bot started" });
-  broadcast({ type: "snapshot", data: snapshot() });
+  const bot = currentBot(req);
+  bot.session.startBot();
+  bot.session.broadcast("log", { message: "Bot started" });
+  bot.session.broadcast("snapshot", { data: bot.session.snapshot() });
   res.json({ ok: true });
 });
 
 app.post("/api/bot/stop", (req, res) => {
-  state.running = false;
-  state.tradeInProgress = false;
-  broadcast({ type: "log", message: "Bot stopped" });
-  broadcast({ type: "snapshot", data: snapshot() });
+  const bot = currentBot(req);
+  bot.session.stopBot();
+  bot.session.broadcast("log", { message: "Bot stopped" });
+  bot.session.broadcast("snapshot", { data: bot.session.snapshot() });
   res.json({ ok: true });
 });
 
 app.post("/api/reset-session", (req, res) => {
-  state.sessionProfit = 0;
-  state.peakProfit = 0;
-  state.tradeCount = 0;
-  state.wins = 0;
-  state.losses = 0;
-  state.lossStreak = 0;
-  state.tradeInProgress = false;
-  state.contractId = null;
-  state.lastTradeMeta = null;
-  state.recentTrades = [];
-  resetStake(state);
-
-  broadcast({ type: "log", message: "Session reset" });
-  broadcast({ type: "snapshot", data: snapshot() });
+  const bot = currentBot(req);
+  bot.session.resetSession();
+  bot.session.broadcast("log", { message: "Session reset" });
+  bot.session.broadcast("snapshot", { data: bot.session.snapshot() });
   res.json({ ok: true });
 });
 
 app.post("/api/disconnect", (req, res) => {
-  closeDeriv();
-  socketReady = false;
-  state.connected = false;
-  state.authorized = false;
-  state.running = false;
-  broadcast({ type: "log", message: "Disconnected from Deriv" });
-  broadcast({ type: "snapshot", data: snapshot() });
+  const bot = currentBot(req);
+  bot.session.disconnect();
+  bot.session.broadcast("log", { message: "Disconnected from Deriv" });
+  bot.session.broadcast("snapshot", { data: bot.session.snapshot() });
   res.json({ ok: true });
+});
+
+app.get("/api/admin/me", requireAdmin, (req, res) => {
+  res.json({
+    ok: true,
+    user: {
+      username: req.currentUser.username,
+      role: req.currentUser.role
+    }
+  });
+});
+
+app.get("/api/admin/users", requireAdmin, (req, res) => {
+  res.json({
+    ok: true,
+    users: listSafeUsers()
+  });
+});
+
+app.post("/api/admin/users", requireAdmin, async (req, res) => {
+  try {
+    const username = String(req.body.username || "").trim();
+    const password = String(req.body.password || "");
+    const role = req.body.role === "admin" ? "admin" : "user";
+    const expiresAt = req.body.expiresAt || null;
+
+    if (!username || !password) {
+      return res.status(400).json({ ok: false, error: "Username and password are required" });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ ok: false, error: "Password must be at least 6 characters" });
+    }
+
+    const user = await createUser(username, password, {
+      role,
+      expiresAt,
+      isDisabled: false
+    });
+
+    res.json({ ok: true, user });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+app.post("/api/admin/users/update", requireAdmin, (req, res) => {
+  const { username, expiresAt, isDisabled, role } = req.body;
+
+  if (!username) {
+    return res.status(400).json({ ok: false, error: "Username is required" });
+  }
+
+  const updates = {};
+  if (expiresAt !== undefined) updates.expiresAt = expiresAt || null;
+  if (isDisabled !== undefined) updates.isDisabled = Boolean(isDisabled);
+  if (role !== undefined) updates.role = role === "admin" ? "admin" : "user";
+
+  const updated = updateUser(username, updates);
+  if (!updated) {
+    return res.status(404).json({ ok: false, error: "User not found" });
+  }
+
+  res.json({ ok: true, user: updated });
+});
+
+app.post("/api/admin/users/delete", requireAdmin, (req, res) => {
+  const username = String(req.body.username || "").trim();
+
+  if (!username) {
+    return res.status(400).json({ ok: false, error: "Username is required" });
+  }
+
+  if (username === "vancore36") {
+    return res.status(400).json({ ok: false, error: "Cannot delete main admin" });
+  }
+
+  const ok = deleteUser(username);
+  if (!ok) {
+    return res.status(404).json({ ok: false, error: "User not found" });
+  }
+
+  res.json({ ok: true });
+});
+
+app.post("/api/admin/users/force-logout", requireAdmin, (req, res) => {
+  const username = String(req.body.username || "").trim();
+  const user = getUser(username);
+
+  if (!user) {
+    return res.status(404).json({ ok: false, error: "User not found" });
+  }
+
+  const updated = updateUser(username, {
+    sessionVersion: (user.sessionVersion || 1) + 1
+  });
+
+  res.json({ ok: true, user: updated });
 });
 
 app.listen(PORT, () => {

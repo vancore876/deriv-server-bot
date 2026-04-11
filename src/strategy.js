@@ -55,7 +55,6 @@ export function computeSignal(state) {
 
   let upMoves = 0;
   let downMoves = 0;
-
   for (const move of recentMoves) {
     if (move > 0) upMoves++;
     if (move < 0) downMoves++;
