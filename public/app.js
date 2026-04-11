@@ -98,7 +98,7 @@ const allSettingInputs = [
   stopLossInput, takeProfitInput, pauseAfterLossesInput, pauseSecondsInput, maxLossesInput, maxTradesInput,
   reentryBlockSecondsInput, peakDrawdownLockInput, sizingModeSelect, botModeSelect, digitModeSelect,
   digitDurationInput, digitDurationUnitInput, digitSampleTargetInput, digitBias50ThresholdInput,
-  digitBias100ThresholdInput, digitBias200ThresholdInput, digitTradeCooldownMsInput,
+  digitBias100ThresholdInput,digitTradeCooldownMsInput,
   digitMaxTradesPerSessionInput
 ];
 
