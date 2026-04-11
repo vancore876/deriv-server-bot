@@ -48,14 +48,13 @@ function buildFreshDigitStats(previous = {}) {
   return {
     lastDigit: null,
     lastDigits: [],
-    counts: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 0, 9: 0 },
+    counts: { 0:0,1:0,2:0,3:0,4:0,5:0,6:0,7:0,8:0,9:0 },
     evenCount: 0,
     oddCount: 0,
     streakType: null,
     streakLength: 0,
     rolling50: [],
     rolling100: [],
-    rolling200: [],
     biasScore: 0,
     signal: "NO TRADE",
     mode: previous.mode || "observer",
@@ -73,9 +72,9 @@ function updateDigitStats(state, quote) {
   const stats = state.digitStats;
   stats.lastDigit = digit;
   stats.lastDigits.push(digit);
-  if (stats.lastDigits.length > 200) stats.lastDigits.shift();
+  if (stats.lastDigits.length > 100) stats.lastDigits.shift();
 
-  stats.counts = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 0, 9: 0 };
+  stats.counts = { 0:0,1:0,2:0,3:0,4:0,5:0,6:0,7:0,8:0,9:0 };
   stats.evenCount = 0;
   stats.oddCount = 0;
 
@@ -87,7 +86,6 @@ function updateDigitStats(state, quote) {
 
   stats.rolling50 = stats.lastDigits.slice(-50);
   stats.rolling100 = stats.lastDigits.slice(-100);
-  stats.rolling200 = stats.lastDigits.slice(-200);
   stats.sampleSize = stats.lastDigits.length;
 
   const sampleTarget = Number(state.settings.digitSampleTarget || 100);
@@ -111,14 +109,9 @@ function updateDigitStats(state, quote) {
 
   if (!stats.sampleTargetReached) return;
 
-  const bias50 = Number(state.settings.digitBias50Threshold || 28);
-  const bias100 = Number(state.settings.digitBias100Threshold || 55);
+  const bias50 = Number(state.settings.digitBias50Threshold || 30);
+  const bias100 = Number(state.settings.digitBias100Threshold || 58);
 
-  // FIX:
-  // Always use 50 + 100 confirmation for digit signals,
-  // even when sample target is set to 200.
-  // A 200-tick sample now only means "wait until 200 ticks are collected"
-  // before allowing analysis/trading, not "switch to 50 + 200 logic".
   if (even50 >= bias50 && even100 >= bias100 && stats.streakType !== "EVEN") {
     stats.signal = "EVEN_BIAS";
   } else if (odd50 >= bias50 && odd100 >= bias100 && stats.streakType !== "ODD") {

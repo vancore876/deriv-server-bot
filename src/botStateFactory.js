@@ -43,7 +43,6 @@ export function createBotState() {
       streakLength: 0,
       rolling50: [],
       rolling100: [],
-      rolling200: [],
       biasScore: 0,
       signal: "NO TRADE",
       mode: "observer",
@@ -83,9 +82,8 @@ export function createBotState() {
       digitDuration: 1,
       digitDurationUnit: "t",
       digitSampleTarget: 100,
-      digitBias50Threshold: 28,
-      digitBias100Threshold: 55,
-      digitBias200Threshold: 112,
+      digitBias50Threshold: 30,
+      digitBias100Threshold: 58,
       digitTradeCooldownMs: 10000,
       digitMaxTradesPerSession: 3
     }

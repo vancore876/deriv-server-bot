@@ -37,7 +37,6 @@ const digitDurationUnitInput = document.getElementById("digitDurationUnit");
 const digitSampleTargetInput = document.getElementById("digitSampleTarget");
 const digitBias50ThresholdInput = document.getElementById("digitBias50Threshold");
 const digitBias100ThresholdInput = document.getElementById("digitBias100Threshold");
-const digitBias200ThresholdInput = document.getElementById("digitBias200Threshold");
 const digitTradeCooldownMsInput = document.getElementById("digitTradeCooldownMs");
 const digitMaxTradesPerSessionInput = document.getElementById("digitMaxTradesPerSession");
 
@@ -216,7 +215,6 @@ function syncSettingsFromSnapshot(settings, snapshot) {
   digitSampleTargetInput.value = String(settings.digitSampleTarget ?? 100);
   digitBias50ThresholdInput.value = settings.digitBias50Threshold ?? 28;
   digitBias100ThresholdInput.value = settings.digitBias100Threshold ?? 55;
-  digitBias200ThresholdInput.value = settings.digitBias200Threshold ?? 112;
   digitTradeCooldownMsInput.value = settings.digitTradeCooldownMs ?? 10000;
   digitMaxTradesPerSessionInput.value = settings.digitMaxTradesPerSession ?? 3;
 
@@ -276,9 +274,6 @@ function renderDigitStats(stats, settings) {
     rolling50Odd: (stats.rolling50 || []).filter((d) => d % 2 !== 0).length,
     rolling100Even: (stats.rolling100 || []).filter((d) => d % 2 === 0).length,
     rolling100Odd: (stats.rolling100 || []).filter((d) => d % 2 !== 0).length,
-    rolling200Even: (stats.rolling200 || []).filter((d) => d % 2 === 0).length,
-    rolling200Odd: (stats.rolling200 || []).filter((d) => d % 2 !== 0).length,
-    biasScore: stats.biasScore ?? 0,
     signal: stats.signal || "NO TRADE"
   };
 
@@ -410,10 +405,9 @@ function getSettingsPayload() {
     peakDrawdownLock: Number(peakDrawdownLockInput.value),
     digitDuration: Number(digitDurationInput.value),
     digitDurationUnit: digitDurationUnitInput.value,
-    digitSampleTarget: Number(digitSampleTargetInput.value),
+    digitSampleTarget: 100(digitSampleTargetInput.value),
     digitBias50Threshold: Number(digitBias50ThresholdInput.value),
     digitBias100Threshold: Number(digitBias100ThresholdInput.value),
-    digitBias200Threshold: Number(digitBias200ThresholdInput.value),
     digitTradeCooldownMs: Number(digitTradeCooldownMsInput.value),
     digitMaxTradesPerSession: Number(digitMaxTradesPerSessionInput.value)
   };
