@@ -34,9 +34,10 @@ const peakDrawdownLockInput = document.getElementById("peakDrawdownLock");
 
 const digitDurationInput = document.getElementById("digitDuration");
 const digitDurationUnitInput = document.getElementById("digitDurationUnit");
-const digitSampleMinInput = document.getElementById("digitSampleMin");
+const digitSampleTargetInput = document.getElementById("digitSampleTarget");
 const digitBias50ThresholdInput = document.getElementById("digitBias50Threshold");
 const digitBias100ThresholdInput = document.getElementById("digitBias100Threshold");
+const digitBias200ThresholdInput = document.getElementById("digitBias200Threshold");
 const digitTradeCooldownMsInput = document.getElementById("digitTradeCooldownMs");
 const digitMaxTradesPerSessionInput = document.getElementById("digitMaxTradesPerSession");
 
@@ -50,6 +51,7 @@ const startTicksBtn = document.getElementById("startTicksBtn");
 const startBotBtn = document.getElementById("startBotBtn");
 const stopBotBtn = document.getElementById("stopBotBtn");
 const resetSessionBtn = document.getElementById("resetSessionBtn");
+const resetAnalyzerBtn = document.getElementById("resetAnalyzerBtn");
 const resetLogsBtn = document.getElementById("resetLogsBtn");
 const saveSettingsBtn = document.getElementById("saveSettingsBtn");
 const loadMarketBtn = document.getElementById("loadMarketBtn");
@@ -69,6 +71,8 @@ const sessionProfitValue = document.getElementById("sessionProfitValue");
 const peakProfitValue = document.getElementById("peakProfitValue");
 const moveValue = document.getElementById("moveValue");
 const countdownValue = document.getElementById("countdownValue");
+const analyzerProgressValue = document.getElementById("analyzerProgressValue");
+const analyzerReadyValue = document.getElementById("analyzerReadyValue");
 const tradesValue = document.getElementById("tradesValue");
 const winsValue = document.getElementById("winsValue");
 const lossesValue = document.getElementById("lossesValue");
@@ -89,13 +93,14 @@ let countdownInterval = null;
 adminBtn.style.display = "none";
 
 const allSettingInputs = [
-  baseStakeInput,minStakeInput,maxStakeInput,durationInput,durationUnitInput,currencyInput,
-  winMultiplierInput,lossMultiplierInput,cooldownMsInput,fastEmaInput,slowEmaInput,confirmTicksInput,
-  moveWindowInput,warmupTicksInput,emaGapThresholdInput,microMoveThresholdInput,stopLossInput,
-  takeProfitInput,pauseAfterLossesInput,pauseSecondsInput,maxLossesInput,maxTradesInput,
-  reentryBlockSecondsInput,peakDrawdownLockInput,sizingModeSelect,botModeSelect,digitModeSelect,
-  digitDurationInput,digitDurationUnitInput,digitSampleMinInput,digitBias50ThresholdInput,
-  digitBias100ThresholdInput,digitTradeCooldownMsInput,digitMaxTradesPerSessionInput
+  baseStakeInput, minStakeInput, maxStakeInput, durationInput, durationUnitInput, currencyInput,
+  winMultiplierInput, lossMultiplierInput, cooldownMsInput, fastEmaInput, slowEmaInput,
+  confirmTicksInput, moveWindowInput, warmupTicksInput, emaGapThresholdInput, microMoveThresholdInput,
+  stopLossInput, takeProfitInput, pauseAfterLossesInput, pauseSecondsInput, maxLossesInput, maxTradesInput,
+  reentryBlockSecondsInput, peakDrawdownLockInput, sizingModeSelect, botModeSelect, digitModeSelect,
+  digitDurationInput, digitDurationUnitInput, digitSampleTargetInput, digitBias50ThresholdInput,
+  digitBias100ThresholdInput, digitBias200ThresholdInput, digitTradeCooldownMsInput,
+  digitMaxTradesPerSessionInput
 ];
 
 allSettingInputs.forEach((el) => {
@@ -171,7 +176,12 @@ function addLog(message) {
 function syncSettingsFromSnapshot(settings, snapshot) {
   if (!settings || !allowSettingsSync) return;
 
-  const json = JSON.stringify({ settings, botMode: snapshot.botMode, digitMode: snapshot.digitStats?.mode });
+  const json = JSON.stringify({
+    settings,
+    botMode: snapshot.botMode,
+    digitMode: snapshot.digitStats?.mode
+  });
+
   if (json === lastSyncedSettingsJson) return;
 
   baseStakeInput.value = settings.baseStake ?? 0.35;
@@ -203,9 +213,10 @@ function syncSettingsFromSnapshot(settings, snapshot) {
 
   digitDurationInput.value = settings.digitDuration ?? 1;
   digitDurationUnitInput.value = settings.digitDurationUnit ?? "t";
-  digitSampleMinInput.value = settings.digitSampleMin ?? 100;
-  digitBias50ThresholdInput.value = settings.digitBias50Threshold ?? 32;
-  digitBias100ThresholdInput.value = settings.digitBias100Threshold ?? 60;
+  digitSampleTargetInput.value = String(settings.digitSampleTarget ?? 100);
+  digitBias50ThresholdInput.value = settings.digitBias50Threshold ?? 28;
+  digitBias100ThresholdInput.value = settings.digitBias100Threshold ?? 55;
+  digitBias200ThresholdInput.value = settings.digitBias200Threshold ?? 112;
   digitTradeCooldownMsInput.value = settings.digitTradeCooldownMs ?? 10000;
   digitMaxTradesPerSessionInput.value = settings.digitMaxTradesPerSession ?? 3;
 
@@ -233,15 +244,28 @@ function updateStats(snapshot) {
   sessionProfitValue.className = "value " + ((snapshot.sessionProfit ?? 0) >= 0 ? "good" : "bad");
   peakProfitValue.className = "value " + ((snapshot.peakProfit ?? 0) >= 0 ? "good" : "bad");
 
+  const sampleSize = snapshot.digitStats?.sampleSize ?? 0;
+  const sampleTarget = Number(snapshot.settings?.digitSampleTarget ?? 100);
+  const ready = Boolean(snapshot.digitStats?.sampleTargetReached);
+
+  analyzerProgressValue.textContent = `${sampleSize} / ${sampleTarget}`;
+  analyzerReadyValue.textContent = ready ? "Yes" : "No";
+  analyzerReadyValue.className = "value " + (ready ? "good" : "");
+
   syncSettingsFromSnapshot(snapshot.settings, snapshot);
   renderTrades(snapshot.recentTrades || []);
-  renderDigitStats(snapshot.digitStats || {});
+  renderDigitStats(snapshot.digitStats || {}, snapshot.settings || {});
 }
 
-function renderDigitStats(stats) {
+function renderDigitStats(stats, settings) {
+  const target = Number(settings.digitSampleTarget || 100);
+
   const payload = {
     mode: stats.mode || "observer",
     executableEnabled: Boolean(stats.executableEnabled),
+    sampleSize: stats.sampleSize ?? (stats.lastDigits || []).length,
+    sampleTarget: target,
+    sampleReady: Boolean(stats.sampleTargetReached),
     lastDigit: stats.lastDigit ?? null,
     last20: (stats.lastDigits || []).slice(-20),
     evenCount: stats.evenCount ?? 0,
@@ -252,6 +276,8 @@ function renderDigitStats(stats) {
     rolling50Odd: (stats.rolling50 || []).filter((d) => d % 2 !== 0).length,
     rolling100Even: (stats.rolling100 || []).filter((d) => d % 2 === 0).length,
     rolling100Odd: (stats.rolling100 || []).filter((d) => d % 2 !== 0).length,
+    rolling200Even: (stats.rolling200 || []).filter((d) => d % 2 === 0).length,
+    rolling200Odd: (stats.rolling200 || []).filter((d) => d % 2 !== 0).length,
     biasScore: stats.biasScore ?? 0,
     signal: stats.signal || "NO TRADE"
   };
@@ -384,9 +410,10 @@ function getSettingsPayload() {
     peakDrawdownLock: Number(peakDrawdownLockInput.value),
     digitDuration: Number(digitDurationInput.value),
     digitDurationUnit: digitDurationUnitInput.value,
-    digitSampleMin: Number(digitSampleMinInput.value),
+    digitSampleTarget: Number(digitSampleTargetInput.value),
     digitBias50Threshold: Number(digitBias50ThresholdInput.value),
     digitBias100Threshold: Number(digitBias100ThresholdInput.value),
+    digitBias200Threshold: Number(digitBias200ThresholdInput.value),
     digitTradeCooldownMs: Number(digitTradeCooldownMsInput.value),
     digitMaxTradesPerSession: Number(digitMaxTradesPerSessionInput.value)
   };
@@ -541,6 +568,11 @@ resetSessionBtn.addEventListener("click", async () => {
   selectedCandles.length = 0;
   drawMainChart();
   addLog("Session reset requested");
+});
+
+resetAnalyzerBtn.addEventListener("click", async () => {
+  await fetch("/api/reset-analyzer", { method: "POST" });
+  addLog("Analyzer reset requested");
 });
 
 resetLogsBtn.addEventListener("click", () => {

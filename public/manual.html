@@ -6,30 +6,17 @@
   <title>Bot Manual</title>
   <link rel="stylesheet" href="/styles.css" />
   <style>
-    .manualCard {
-      margin-bottom: 16px;
-    }
-
-    .manualCard p,
-    .manualCard li {
-      color: #e2e8f0;
-      line-height: 1.6;
-    }
-
-    .manualCard h3 {
-      margin-top: 0;
-    }
-
-    .manualList {
-      padding-left: 20px;
-    }
+    .manualCard { margin-bottom: 16px; }
+    .manualCard p, .manualCard li { color: #e2e8f0; line-height: 1.6; }
+    .manualCard h3 { margin-top: 0; }
+    .manualList { padding-left: 20px; }
   </style>
 </head>
 <body>
   <div class="wrap">
     <div class="hero">
       <h1>User Manual 📘</h1>
-      <p>How to use the dashboard and where to find your Deriv API token.</p>
+      <p>How to use the dashboard, digit analyzer, and where to find your Deriv API token.</p>
     </div>
 
     <div class="card glass manualCard">
@@ -54,7 +41,7 @@
       <h3>How to find your Deriv API token</h3>
       <ol class="manualList">
         <li>Log in to your Deriv account</li>
-        <li>Open the Deriv API area / token manager</li>
+        <li>Open the Deriv API area or token manager</li>
         <li>Go to <strong>Manage Tokens</strong> or <strong>API Token Manager</strong></li>
         <li>Create a token with the scopes needed for trading and account use</li>
         <li>Copy that token and paste it into this dashboard</li>
@@ -76,6 +63,33 @@
     </div>
 
     <div class="card glass manualCard">
+      <h3>Digit Analyzer modes</h3>
+      <ul class="manualList">
+        <li><strong>Observer Analyzer</strong> watches last digits, builds samples, calculates bias, and shows signals, but places no digit trades.</li>
+        <li><strong>Executable Analyzer</strong> uses the same analysis but is allowed to place <strong>DIGITEVEN</strong> or <strong>DIGITODD</strong> trades once the signal becomes strong enough.</li>
+      </ul>
+    </div>
+
+    <div class="card glass manualCard">
+      <h3>Digit Analyzer settings</h3>
+      <ul class="manualList">
+        <li><strong>Analyzer Precision</strong> lets you choose <strong>100 ticks</strong> or <strong>200 ticks</strong>.</li>
+        <li><strong>100 ticks</strong> is faster and gives more trade opportunities.</li>
+        <li><strong>200 ticks</strong> is slower but gives more precision and stronger confirmation.</li>
+        <li><strong>Analyzer Sample</strong> shows how many ticks have been collected out of the selected target.</li>
+        <li><strong>Analyzer Ready</strong> turns to Yes when the selected sample target has been reached.</li>
+      </ul>
+    </div>
+
+    <div class="card glass manualCard">
+      <h3>Reset options</h3>
+      <ul class="manualList">
+        <li><strong>Reset Session</strong> clears session stats, P&amp;L, recent trades, wins, losses, and trade counters.</li>
+        <li><strong>Reset Analyzer</strong> clears digit analyzer memory, including collected digit history and rolling samples, so it can start collecting from zero again.</li>
+      </ul>
+    </div>
+
+    <div class="card glass manualCard">
       <h3>What the buttons do</h3>
       <ul class="manualList">
         <li><strong>Connect</strong> — connects your Deriv session</li>
@@ -84,6 +98,7 @@
         <li><strong>Start Bot</strong> — starts automated trading logic</li>
         <li><strong>Stop Bot</strong> — stops new automated trades</li>
         <li><strong>Reset Session</strong> — clears session stats and recent trades</li>
+        <li><strong>Reset Analyzer</strong> — clears digit analyzer samples and bias history</li>
         <li><strong>Clear Log</strong> — clears the visible log box only</li>
       </ul>
     </div>
@@ -96,6 +111,8 @@
         <li><strong>Peak P&amp;L</strong> — highest session P&amp;L reached</li>
         <li><strong>Move %</strong> — chart movement from the first visible candle to the latest candle</li>
         <li><strong>Access Timer</strong> — how long your account access remains</li>
+        <li><strong>Analyzer Sample</strong> — how many ticks have been collected for the digit analyzer</li>
+        <li><strong>Analyzer Ready</strong> — whether the analyzer has reached the selected sample target</li>
       </ul>
     </div>
 

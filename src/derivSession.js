@@ -44,6 +44,28 @@ function getLastDigit(quote) {
   return Number(digits[digits.length - 1]);
 }
 
+function buildFreshDigitStats(previous = {}) {
+  return {
+    lastDigit: null,
+    lastDigits: [],
+    counts: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 0, 9: 0 },
+    evenCount: 0,
+    oddCount: 0,
+    streakType: null,
+    streakLength: 0,
+    rolling50: [],
+    rolling100: [],
+    rolling200: [],
+    biasScore: 0,
+    signal: "NO TRADE",
+    mode: previous.mode || "observer",
+    executableEnabled: Boolean(previous.executableEnabled),
+    tradeCooldownUntil: 0,
+    sampleSize: 0,
+    sampleTargetReached: false
+  };
+}
+
 function updateDigitStats(state, quote) {
   const digit = getLastDigit(quote);
   if (digit === null) return;
@@ -53,8 +75,7 @@ function updateDigitStats(state, quote) {
   stats.lastDigits.push(digit);
   if (stats.lastDigits.length > 200) stats.lastDigits.shift();
 
-  // recompute counts from last 200 for consistency
-  stats.counts = { 0:0,1:0,2:0,3:0,4:0,5:0,6:0,7:0,8:0,9:0 };
+  stats.counts = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 0, 9: 0 };
   stats.evenCount = 0;
   stats.oddCount = 0;
 
@@ -67,30 +88,37 @@ function updateDigitStats(state, quote) {
   stats.rolling50 = stats.lastDigits.slice(-50);
   stats.rolling100 = stats.lastDigits.slice(-100);
   stats.rolling200 = stats.lastDigits.slice(-200);
+  stats.sampleSize = stats.lastDigits.length;
+
+  const sampleTarget = Number(state.settings.digitSampleTarget || 100);
+  stats.sampleTargetReached = stats.sampleSize >= sampleTarget;
 
   const kind = digit % 2 === 0 ? "EVEN" : "ODD";
-  if (stats.streakType === kind) stats.streakLength += 1;
-  else {
+  if (stats.streakType === kind) {
+    stats.streakLength += 1;
+  } else {
     stats.streakType = kind;
     stats.streakLength = 1;
   }
 
   const even50 = stats.rolling50.filter((d) => d % 2 === 0).length;
   const odd50 = stats.rolling50.length - even50;
-  stats.biasScore = Math.abs(even50 - odd50);
-
-  stats.signal = "NO TRADE";
-
-  if (stats.rolling100.length < Number(state.settings.digitSampleMin || 100)) {
-    return;
-  }
-
   const even100 = stats.rolling100.filter((d) => d % 2 === 0).length;
   const odd100 = stats.rolling100.length - even100;
 
-  const bias50 = Number(state.settings.digitBias50Threshold || 32);
-  const bias100 = Number(state.settings.digitBias100Threshold || 60);
+  stats.biasScore = Math.abs(even50 - odd50);
+  stats.signal = "NO TRADE";
 
+  if (!stats.sampleTargetReached) return;
+
+  const bias50 = Number(state.settings.digitBias50Threshold || 28);
+  const bias100 = Number(state.settings.digitBias100Threshold || 55);
+
+  // FIX:
+  // Always use 50 + 100 confirmation for digit signals,
+  // even when sample target is set to 200.
+  // A 200-tick sample now only means "wait until 200 ticks are collected"
+  // before allowing analysis/trading, not "switch to 50 + 200 logic".
   if (even50 >= bias50 && even100 >= bias100 && stats.streakType !== "EVEN") {
     stats.signal = "EVEN_BIAS";
   } else if (odd50 >= bias50 && odd100 >= bias100 && stats.streakType !== "ODD") {
@@ -218,7 +246,8 @@ export class DerivSession {
       const price = Number(data.tick.quote);
       const symbol = data.tick.symbol;
 
-      this.broadcast("tick", {
+      this.broadcast({
+        type: "tick",
         symbol,
         quote: price,
         epoch: data.tick.epoch
@@ -232,7 +261,7 @@ export class DerivSession {
         if (this.state.botMode === "trend") {
           signal = this.handleTickForTrend(price);
         } else {
-          signal = this.handleTickForDigits(price);
+          signal = this.handleTickForDigits();
         }
 
         this.broadcast("snapshot", { data: this.snapshot() });
@@ -312,7 +341,7 @@ export class DerivSession {
     return computeSignal(this.state);
   }
 
-  handleTickForDigits(price) {
+  handleTickForDigits() {
     const stats = this.state.digitStats;
 
     if (!this.state.running) return null;
@@ -320,9 +349,11 @@ export class DerivSession {
     const mode = stats.mode || "observer";
     const executable = mode === "executable" && Boolean(stats.executableEnabled);
 
-    this.state.lastSignalText = `Digit: ${stats.signal} | Bias ${stats.biasScore}`;
+    const target = Number(this.state.settings.digitSampleTarget || 100);
+    this.state.lastSignalText = `Digit: ${stats.signal} | ${stats.sampleSize}/${target} | Bias ${stats.biasScore}`;
 
     if (!executable) return null;
+    if (!stats.sampleTargetReached) return null;
     if (this.state.tradeInProgress || isPaused(this.state) || !canTradeNow(this.state)) return null;
     if (Date.now() < (stats.tradeCooldownUntil || 0)) return null;
     if ((this.state.tradeCount || 0) >= Number(this.state.settings.digitMaxTradesPerSession || 3)) return null;
@@ -432,6 +463,11 @@ export class DerivSession {
   stopBot() {
     this.state.running = false;
     this.state.tradeInProgress = false;
+  }
+
+  resetAnalyzer() {
+    this.state.digitStats = buildFreshDigitStats(this.state.digitStats);
+    this.broadcast("log", { message: "Digit analyzer reset" });
   }
 
   resetSession() {

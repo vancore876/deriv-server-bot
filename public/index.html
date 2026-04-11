@@ -86,7 +86,12 @@
 
         <div class="row">
           <button id="resetSessionBtn" class="secondaryBtn">Reset Session</button>
+          <button id="resetAnalyzerBtn" class="secondaryBtn">Reset Analyzer</button>
+        </div>
+
+        <div class="row">
           <button id="resetLogsBtn" class="secondaryBtn">Clear Log</button>
+          <div></div>
         </div>
       </div>
     </div>
@@ -144,9 +149,10 @@
         <div class="settingsGrid">
           <div class="settingBox"><label for="digitDuration">Digit Duration</label><input id="digitDuration" type="number" step="1" value="1" /></div>
           <div class="settingBox"><label for="digitDurationUnit">Digit Duration Unit</label><select id="digitDurationUnit"><option value="t" selected>Ticks</option><option value="s">Seconds</option></select></div>
-          <div class="settingBox"><label for="digitSampleMin">Minimum Sample</label><input id="digitSampleMin" type="number" step="1" value="100" /></div>
-          <div class="settingBox"><label for="digitBias50Threshold">Bias 50 Threshold</label><input id="digitBias50Threshold" type="number" step="1" value="32" /></div>
-          <div class="settingBox"><label for="digitBias100Threshold">Bias 100 Threshold</label><input id="digitBias100Threshold" type="number" step="1" value="60" /></div>
+          <div class="settingBox"><label for="digitSampleTarget">Analyzer Precision</label><select id="digitSampleTarget"><option value="100" selected>100 Ticks</option><option value="200">200 Ticks</option></select></div>
+          <div class="settingBox"><label for="digitBias50Threshold">Bias 50 Threshold</label><input id="digitBias50Threshold" type="number" step="1" value="28" /></div>
+          <div class="settingBox"><label for="digitBias100Threshold">Bias 100 Threshold</label><input id="digitBias100Threshold" type="number" step="1" value="55" /></div>
+          <div class="settingBox"><label for="digitBias200Threshold">Bias 200 Threshold</label><input id="digitBias200Threshold" type="number" step="1" value="112" /></div>
           <div class="settingBox"><label for="digitTradeCooldownMs">Digit Cooldown (ms)</label><input id="digitTradeCooldownMs" type="number" step="1000" value="10000" /></div>
           <div class="settingBox"><label for="digitMaxTradesPerSession">Digit Max Trades</label><input id="digitMaxTradesPerSession" type="number" step="1" value="3" /></div>
         </div>
@@ -168,6 +174,8 @@
       <div class="statCard glass"><div class="label">Peak P&amp;L</div><div class="value" id="peakProfitValue">0.00</div></div>
       <div class="statCard glass"><div class="label">Move %</div><div class="value" id="moveValue">0.000%</div></div>
       <div class="statCard glass"><div class="label">Access Timer</div><div class="value" id="countdownValue">No limit</div></div>
+      <div class="statCard glass"><div class="label">Analyzer Sample</div><div class="value" id="analyzerProgressValue">0 / 100</div></div>
+      <div class="statCard glass"><div class="label">Analyzer Ready</div><div class="value" id="analyzerReadyValue">No</div></div>
       <div class="statCard glass"><div class="label">Trades</div><div class="value" id="tradesValue">0</div></div>
       <div class="statCard glass"><div class="label">Wins</div><div class="value good" id="winsValue">0</div></div>
       <div class="statCard glass"><div class="label">Losses</div><div class="value bad" id="lossesValue">0</div></div>

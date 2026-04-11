@@ -242,6 +242,13 @@ app.post("/api/settings", (req, res) => {
   res.json({ ok: true, settings: bot.state.settings });
 });
 
+app.post("/api/reset-analyzer", (req, res) => {
+  const bot = currentBot(req);
+  bot.session.resetAnalyzer();
+  bot.session.broadcast("snapshot", { data: bot.session.snapshot() });
+  res.json({ ok: true });
+});
+
 app.post("/api/preset", (req, res) => {
   const bot = currentBot(req);
   const preset = presets[req.body.preset];

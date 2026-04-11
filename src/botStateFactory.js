@@ -48,7 +48,9 @@ export function createBotState() {
       signal: "NO TRADE",
       mode: "observer",
       executableEnabled: false,
-      tradeCooldownUntil: 0
+      tradeCooldownUntil: 0,
+      sampleSize: 0,
+      sampleTargetReached: false
     },
 
     settings: {
@@ -80,9 +82,10 @@ export function createBotState() {
 
       digitDuration: 1,
       digitDurationUnit: "t",
-      digitSampleMin: 100,
-      digitBias50Threshold: 32,
-      digitBias100Threshold: 60,
+      digitSampleTarget: 100,
+      digitBias50Threshold: 28,
+      digitBias100Threshold: 55,
+      digitBias200Threshold: 112,
       digitTradeCooldownMs: 10000,
       digitMaxTradesPerSession: 3
     }
