@@ -234,7 +234,9 @@ app.post("/api/settings", (req, res) => {
   bot.session.updateSettings({
     settings: req.body.settings || {},
     sizingMode: req.body.sizingMode,
-    contractType: req.body.contractType
+    contractType: req.body.contractType,
+    botMode: req.body.botMode,
+    digitMode: req.body.digitMode
   });
   bot.session.broadcast("snapshot", { data: bot.session.snapshot() });
   res.json({ ok: true, settings: bot.state.settings });

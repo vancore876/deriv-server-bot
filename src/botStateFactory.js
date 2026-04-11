@@ -5,6 +5,7 @@ export function createBotState() {
     running: false,
     contractType: "rise_fall",
     sizingMode: "fixed",
+    botMode: "trend",
 
     token: "",
     balance: 0,
@@ -32,6 +33,24 @@ export function createBotState() {
     lastSignalText: "-",
     lastTradeMeta: null,
 
+    digitStats: {
+      lastDigit: null,
+      lastDigits: [],
+      counts: { 0:0,1:0,2:0,3:0,4:0,5:0,6:0,7:0,8:0,9:0 },
+      evenCount: 0,
+      oddCount: 0,
+      streakType: null,
+      streakLength: 0,
+      rolling50: [],
+      rolling100: [],
+      rolling200: [],
+      biasScore: 0,
+      signal: "NO TRADE",
+      mode: "observer",
+      executableEnabled: false,
+      tradeCooldownUntil: 0
+    },
+
     settings: {
       market: "R_25",
       baseStake: 0.35,
@@ -57,7 +76,15 @@ export function createBotState() {
       maxLosses: 5,
       maxTrades: 35,
       reentryBlockSeconds: 30,
-      peakDrawdownLock: 0.8
+      peakDrawdownLock: 0.8,
+
+      digitDuration: 1,
+      digitDurationUnit: "t",
+      digitSampleMin: 100,
+      digitBias50Threshold: 32,
+      digitBias100Threshold: 60,
+      digitTradeCooldownMs: 10000,
+      digitMaxTradesPerSession: 3
     }
   };
 }

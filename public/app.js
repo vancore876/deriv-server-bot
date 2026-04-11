@@ -2,6 +2,8 @@ const tokenInput = document.getElementById("token");
 const marketSelect = document.getElementById("market");
 const presetSelect = document.getElementById("preset");
 const sizingModeSelect = document.getElementById("sizingMode");
+const botModeSelect = document.getElementById("botMode");
+const digitModeSelect = document.getElementById("digitMode");
 
 const baseStakeInput = document.getElementById("baseStake");
 const minStakeInput = document.getElementById("minStake");
@@ -30,9 +32,18 @@ const maxTradesInput = document.getElementById("maxTrades");
 const reentryBlockSecondsInput = document.getElementById("reentryBlockSeconds");
 const peakDrawdownLockInput = document.getElementById("peakDrawdownLock");
 
+const digitDurationInput = document.getElementById("digitDuration");
+const digitDurationUnitInput = document.getElementById("digitDurationUnit");
+const digitSampleMinInput = document.getElementById("digitSampleMin");
+const digitBias50ThresholdInput = document.getElementById("digitBias50Threshold");
+const digitBias100ThresholdInput = document.getElementById("digitBias100Threshold");
+const digitTradeCooldownMsInput = document.getElementById("digitTradeCooldownMs");
+const digitMaxTradesPerSessionInput = document.getElementById("digitMaxTradesPerSession");
+
 const connectBtn = document.getElementById("connectBtn");
 const disconnectBtn = document.getElementById("disconnectBtn");
 const logoutBtn = document.getElementById("logoutBtn");
+const manualBtn = document.getElementById("manualBtn");
 const adminBtn = document.getElementById("adminBtn");
 const applyPresetBtn = document.getElementById("applyPresetBtn");
 const startTicksBtn = document.getElementById("startTicksBtn");
@@ -42,10 +53,10 @@ const resetSessionBtn = document.getElementById("resetSessionBtn");
 const resetLogsBtn = document.getElementById("resetLogsBtn");
 const saveSettingsBtn = document.getElementById("saveSettingsBtn");
 const loadMarketBtn = document.getElementById("loadMarketBtn");
-const manualBtn = document.getElementById("manualBtn");
 
 const tickOutput = document.getElementById("tickOutput");
 const snapshotOutput = document.getElementById("snapshotOutput");
+const digitOutput = document.getElementById("digitOutput");
 const logOutput = document.getElementById("logOutput");
 const tradesTableBody = document.getElementById("tradesTableBody");
 
@@ -67,19 +78,8 @@ const stakeValue = document.getElementById("stakeValue");
 const chartCanvas = document.getElementById("priceChart");
 const chartMeta = document.getElementById("chartMeta");
 
-const miniR10 = document.getElementById("miniR10");
-const miniR25 = document.getElementById("miniR25");
-const miniR50 = document.getElementById("miniR50");
-
 const selectedCandles = [];
-const miniCandles = {
-  R_10: [],
-  R_25: [],
-  R_50: []
-};
-
 const TICKS_PER_CANDLE_MAIN = 4;
-const TICKS_PER_CANDLE_MINI = 5;
 
 let allowSettingsSync = true;
 let lastSyncedSettingsJson = "";
@@ -89,31 +89,13 @@ let countdownInterval = null;
 adminBtn.style.display = "none";
 
 const allSettingInputs = [
-  baseStakeInput,
-  minStakeInput,
-  maxStakeInput,
-  durationInput,
-  durationUnitInput,
-  currencyInput,
-  winMultiplierInput,
-  lossMultiplierInput,
-  cooldownMsInput,
-  fastEmaInput,
-  slowEmaInput,
-  confirmTicksInput,
-  moveWindowInput,
-  warmupTicksInput,
-  emaGapThresholdInput,
-  microMoveThresholdInput,
-  stopLossInput,
-  takeProfitInput,
-  pauseAfterLossesInput,
-  pauseSecondsInput,
-  maxLossesInput,
-  maxTradesInput,
-  reentryBlockSecondsInput,
-  peakDrawdownLockInput,
-  sizingModeSelect
+  baseStakeInput,minStakeInput,maxStakeInput,durationInput,durationUnitInput,currencyInput,
+  winMultiplierInput,lossMultiplierInput,cooldownMsInput,fastEmaInput,slowEmaInput,confirmTicksInput,
+  moveWindowInput,warmupTicksInput,emaGapThresholdInput,microMoveThresholdInput,stopLossInput,
+  takeProfitInput,pauseAfterLossesInput,pauseSecondsInput,maxLossesInput,maxTradesInput,
+  reentryBlockSecondsInput,peakDrawdownLockInput,sizingModeSelect,botModeSelect,digitModeSelect,
+  digitDurationInput,digitDurationUnitInput,digitSampleMinInput,digitBias50ThresholdInput,
+  digitBias100ThresholdInput,digitTradeCooldownMsInput,digitMaxTradesPerSessionInput
 ];
 
 allSettingInputs.forEach((el) => {
@@ -141,13 +123,13 @@ function startCountdown() {
       return;
     }
 
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
-    const minutes = Math.floor((diff / (1000 * 60)) % 60);
+    const days = Math.floor(diff / 86400000);
+    const hours = Math.floor((diff / 3600000) % 24);
+    const minutes = Math.floor((diff / 60000) % 60);
     const seconds = Math.floor((diff / 1000) % 60);
 
     countdownValue.textContent = `${days}d ${hours}h ${minutes}m ${seconds}s`;
-    countdownValue.className = "value good";
+    countdownValue.className = "value " + (diff < 3600000 ? "bad" : diff < 86400000 ? "" : "good");
   };
 
   render();
@@ -175,12 +157,7 @@ async function loadRole() {
   try {
     const res = await fetch("/auth/status");
     const data = await res.json();
-
-    if (data.role === "admin") {
-      adminBtn.style.display = "block";
-    } else {
-      adminBtn.style.display = "none";
-    }
+    adminBtn.style.display = data.role === "admin" ? "block" : "none";
   } catch {
     adminBtn.style.display = "none";
   }
@@ -191,10 +168,10 @@ function addLog(message) {
   logOutput.textContent = `[${now}] ${message}\n` + logOutput.textContent;
 }
 
-function syncSettingsFromSnapshot(settings) {
+function syncSettingsFromSnapshot(settings, snapshot) {
   if (!settings || !allowSettingsSync) return;
 
-  const json = JSON.stringify(settings);
+  const json = JSON.stringify({ settings, botMode: snapshot.botMode, digitMode: snapshot.digitStats?.mode });
   if (json === lastSyncedSettingsJson) return;
 
   baseStakeInput.value = settings.baseStake ?? 0.35;
@@ -224,6 +201,17 @@ function syncSettingsFromSnapshot(settings) {
   reentryBlockSecondsInput.value = settings.reentryBlockSeconds ?? 30;
   peakDrawdownLockInput.value = settings.peakDrawdownLock ?? 0.8;
 
+  digitDurationInput.value = settings.digitDuration ?? 1;
+  digitDurationUnitInput.value = settings.digitDurationUnit ?? "t";
+  digitSampleMinInput.value = settings.digitSampleMin ?? 100;
+  digitBias50ThresholdInput.value = settings.digitBias50Threshold ?? 32;
+  digitBias100ThresholdInput.value = settings.digitBias100Threshold ?? 60;
+  digitTradeCooldownMsInput.value = settings.digitTradeCooldownMs ?? 10000;
+  digitMaxTradesPerSessionInput.value = settings.digitMaxTradesPerSession ?? 3;
+
+  botModeSelect.value = snapshot.botMode ?? "trend";
+  digitModeSelect.value = snapshot.digitStats?.mode ?? "observer";
+
   lastSyncedSettingsJson = json;
 }
 
@@ -236,7 +224,6 @@ function updateStats(snapshot) {
   balanceValue.textContent = Number(snapshot.balance ?? 0).toFixed(2);
   sessionProfitValue.textContent = Number(snapshot.sessionProfit ?? 0).toFixed(2);
   peakProfitValue.textContent = Number(snapshot.peakProfit ?? 0).toFixed(2);
-
   tradesValue.textContent = snapshot.tradeCount ?? 0;
   winsValue.textContent = snapshot.wins ?? 0;
   lossesValue.textContent = snapshot.losses ?? 0;
@@ -246,13 +233,34 @@ function updateStats(snapshot) {
   sessionProfitValue.className = "value " + ((snapshot.sessionProfit ?? 0) >= 0 ? "good" : "bad");
   peakProfitValue.className = "value " + ((snapshot.peakProfit ?? 0) >= 0 ? "good" : "bad");
 
-  syncSettingsFromSnapshot(snapshot.settings);
+  syncSettingsFromSnapshot(snapshot.settings, snapshot);
   renderTrades(snapshot.recentTrades || []);
+  renderDigitStats(snapshot.digitStats || {});
+}
+
+function renderDigitStats(stats) {
+  const payload = {
+    mode: stats.mode || "observer",
+    executableEnabled: Boolean(stats.executableEnabled),
+    lastDigit: stats.lastDigit ?? null,
+    last20: (stats.lastDigits || []).slice(-20),
+    evenCount: stats.evenCount ?? 0,
+    oddCount: stats.oddCount ?? 0,
+    streakType: stats.streakType || null,
+    streakLength: stats.streakLength ?? 0,
+    rolling50Even: (stats.rolling50 || []).filter((d) => d % 2 === 0).length,
+    rolling50Odd: (stats.rolling50 || []).filter((d) => d % 2 !== 0).length,
+    rolling100Even: (stats.rolling100 || []).filter((d) => d % 2 === 0).length,
+    rolling100Odd: (stats.rolling100 || []).filter((d) => d % 2 !== 0).length,
+    biasScore: stats.biasScore ?? 0,
+    signal: stats.signal || "NO TRADE"
+  };
+
+  digitOutput.textContent = JSON.stringify(payload, null, 2);
 }
 
 function renderTrades(trades) {
   tradesTableBody.innerHTML = "";
-
   for (const trade of trades) {
     const tr = document.createElement("tr");
     tr.innerHTML = `
@@ -276,7 +284,6 @@ function pushCandle(candles, price, ticksPerCandle, maxCandles) {
   }
 
   const last = candles[candles.length - 1];
-
   if (last.count >= ticksPerCandle) {
     candles.push({ open: price, high: price, low: price, close: price, count: 1 });
     if (candles.length > maxCandles) candles.shift();
@@ -305,13 +312,6 @@ function drawCandles(canvas, candles) {
 
   const candleWidth = Math.max(4, (width / candles.length) * 0.6);
   const gap = width / candles.length;
-
-  ctx.strokeStyle = "rgba(255,255,255,0.12)";
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(0, height - 1);
-  ctx.lineTo(width, height - 1);
-  ctx.stroke();
 
   candles.forEach((candle, index) => {
     const x = index * gap + gap / 2;
@@ -355,12 +355,6 @@ function drawMainChart() {
   moveValue.className = "value " + (movePct >= 0 ? "good" : "bad");
 }
 
-function drawMiniCharts() {
-  drawCandles(miniR10, miniCandles.R_10);
-  drawCandles(miniR25, miniCandles.R_25);
-  drawCandles(miniR50, miniCandles.R_50);
-}
-
 function getSettingsPayload() {
   return {
     market: marketSelect.value,
@@ -387,7 +381,14 @@ function getSettingsPayload() {
     maxLosses: Number(maxLossesInput.value),
     maxTrades: Number(maxTradesInput.value),
     reentryBlockSeconds: Number(reentryBlockSecondsInput.value),
-    peakDrawdownLock: Number(peakDrawdownLockInput.value)
+    peakDrawdownLock: Number(peakDrawdownLockInput.value),
+    digitDuration: Number(digitDurationInput.value),
+    digitDurationUnit: digitDurationUnitInput.value,
+    digitSampleMin: Number(digitSampleMinInput.value),
+    digitBias50Threshold: Number(digitBias50ThresholdInput.value),
+    digitBias100Threshold: Number(digitBias100ThresholdInput.value),
+    digitTradeCooldownMs: Number(digitTradeCooldownMsInput.value),
+    digitMaxTradesPerSession: Number(digitMaxTradesPerSessionInput.value)
   };
 }
 
@@ -398,18 +399,12 @@ eventSource.onmessage = (event) => {
 
   if (payload.type === "tick") {
     tickOutput.textContent = JSON.stringify(payload, null, 2);
-
     const quote = Number(payload.quote);
     const symbol = payload.symbol;
 
     if (symbol === marketSelect.value) {
       pushCandle(selectedCandles, quote, TICKS_PER_CANDLE_MAIN, 60);
       drawMainChart();
-    }
-
-    if (miniCandles[symbol]) {
-      pushCandle(miniCandles[symbol], quote, TICKS_PER_CANDLE_MINI, 24);
-      drawMiniCharts();
     }
   }
 
@@ -428,12 +423,7 @@ connectBtn.addEventListener("click", async () => {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ token: tokenInput.value })
   });
-
   addLog("Connect requested");
-});
-
-manualBtn.addEventListener("click", () => {
-  window.location.href = "/manual";
 });
 
 disconnectBtn.addEventListener("click", async () => {
@@ -446,19 +436,21 @@ logoutBtn.addEventListener("click", async () => {
   window.location.href = "/login";
 });
 
+manualBtn.addEventListener("click", () => {
+  window.location.href = "/manual";
+});
+
 adminBtn.addEventListener("click", () => {
   window.location.href = "/admin";
 });
 
 applyPresetBtn.addEventListener("click", async () => {
   allowSettingsSync = true;
-
   await fetch("/api/preset", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ preset: presetSelect.value })
   });
-
   addLog(`Preset applied: ${presetSelect.value}`);
 });
 
@@ -471,6 +463,8 @@ saveSettingsBtn.addEventListener("click", async () => {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       sizingMode: sizingModeSelect.value,
+      botMode: botModeSelect.value,
+      digitMode: digitModeSelect.value,
       settings: getSettingsPayload()
     })
   });
@@ -490,6 +484,8 @@ loadMarketBtn.addEventListener("click", async () => {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       sizingMode: sizingModeSelect.value,
+      botMode: botModeSelect.value,
+      digitMode: digitModeSelect.value,
       settings: getSettingsPayload()
     })
   });
@@ -515,6 +511,8 @@ startTicksBtn.addEventListener("click", async () => {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       sizingMode: sizingModeSelect.value,
+      botMode: botModeSelect.value,
+      digitMode: digitModeSelect.value,
       settings: getSettingsPayload()
     })
   });
@@ -553,7 +551,6 @@ document.querySelectorAll(".tabBtn").forEach((btn) => {
   btn.addEventListener("click", () => {
     document.querySelectorAll(".tabBtn").forEach((b) => b.classList.remove("active"));
     document.querySelectorAll(".tabPanel").forEach((p) => p.classList.remove("active"));
-
     btn.classList.add("active");
     document.getElementById(btn.dataset.tab).classList.add("active");
   });
@@ -561,7 +558,6 @@ document.querySelectorAll(".tabBtn").forEach((btn) => {
 
 window.addEventListener("resize", () => {
   drawMainChart();
-  drawMiniCharts();
 });
 
 checkAuth();

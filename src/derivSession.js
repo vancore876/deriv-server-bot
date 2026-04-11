@@ -37,6 +37,67 @@ function isPaused(state) {
   return Date.now() < state.pauseUntil || Date.now() < state.blockedUntil;
 }
 
+function getLastDigit(quote) {
+  const str = String(quote);
+  const digits = str.replace(/\D/g, "");
+  if (!digits.length) return null;
+  return Number(digits[digits.length - 1]);
+}
+
+function updateDigitStats(state, quote) {
+  const digit = getLastDigit(quote);
+  if (digit === null) return;
+
+  const stats = state.digitStats;
+  stats.lastDigit = digit;
+  stats.lastDigits.push(digit);
+  if (stats.lastDigits.length > 200) stats.lastDigits.shift();
+
+  // recompute counts from last 200 for consistency
+  stats.counts = { 0:0,1:0,2:0,3:0,4:0,5:0,6:0,7:0,8:0,9:0 };
+  stats.evenCount = 0;
+  stats.oddCount = 0;
+
+  for (const d of stats.lastDigits) {
+    stats.counts[d] += 1;
+    if (d % 2 === 0) stats.evenCount += 1;
+    else stats.oddCount += 1;
+  }
+
+  stats.rolling50 = stats.lastDigits.slice(-50);
+  stats.rolling100 = stats.lastDigits.slice(-100);
+  stats.rolling200 = stats.lastDigits.slice(-200);
+
+  const kind = digit % 2 === 0 ? "EVEN" : "ODD";
+  if (stats.streakType === kind) stats.streakLength += 1;
+  else {
+    stats.streakType = kind;
+    stats.streakLength = 1;
+  }
+
+  const even50 = stats.rolling50.filter((d) => d % 2 === 0).length;
+  const odd50 = stats.rolling50.length - even50;
+  stats.biasScore = Math.abs(even50 - odd50);
+
+  stats.signal = "NO TRADE";
+
+  if (stats.rolling100.length < Number(state.settings.digitSampleMin || 100)) {
+    return;
+  }
+
+  const even100 = stats.rolling100.filter((d) => d % 2 === 0).length;
+  const odd100 = stats.rolling100.length - even100;
+
+  const bias50 = Number(state.settings.digitBias50Threshold || 32);
+  const bias100 = Number(state.settings.digitBias100Threshold || 60);
+
+  if (even50 >= bias50 && even100 >= bias100 && stats.streakType !== "EVEN") {
+    stats.signal = "EVEN_BIAS";
+  } else if (odd50 >= bias50 && odd100 >= bias100 && stats.streakType !== "ODD") {
+    stats.signal = "ODD_BIAS";
+  }
+}
+
 export class DerivSession {
   constructor(state, emit, appId = "1089") {
     this.state = state;
@@ -65,6 +126,8 @@ export class DerivSession {
       currentStake: this.state.currentStake,
       contractType: this.state.contractType,
       sizingMode: this.state.sizingMode,
+      botMode: this.state.botMode,
+      digitStats: this.state.digitStats,
       settings: this.state.settings,
       recentTrades: this.state.recentTrades.slice(0, 20)
     };
@@ -162,7 +225,16 @@ export class DerivSession {
       });
 
       if (symbol === this.state.settings.market) {
-        const signal = this.handleTickForBot(price);
+        updateDigitStats(this.state, price);
+
+        let signal = null;
+
+        if (this.state.botMode === "trend") {
+          signal = this.handleTickForTrend(price);
+        } else {
+          signal = this.handleTickForDigits(price);
+        }
+
         this.broadcast("snapshot", { data: this.snapshot() });
 
         if (signal && !this.state.tradeInProgress && this.state.running) {
@@ -230,7 +302,7 @@ export class DerivSession {
     }
   }
 
-  handleTickForBot(price) {
+  handleTickForTrend(price) {
     updateIndicators(this.state, price);
 
     if (!this.state.running || this.state.tradeInProgress || isPaused(this.state) || !canTradeNow(this.state)) {
@@ -238,6 +310,34 @@ export class DerivSession {
     }
 
     return computeSignal(this.state);
+  }
+
+  handleTickForDigits(price) {
+    const stats = this.state.digitStats;
+
+    if (!this.state.running) return null;
+
+    const mode = stats.mode || "observer";
+    const executable = mode === "executable" && Boolean(stats.executableEnabled);
+
+    this.state.lastSignalText = `Digit: ${stats.signal} | Bias ${stats.biasScore}`;
+
+    if (!executable) return null;
+    if (this.state.tradeInProgress || isPaused(this.state) || !canTradeNow(this.state)) return null;
+    if (Date.now() < (stats.tradeCooldownUntil || 0)) return null;
+    if ((this.state.tradeCount || 0) >= Number(this.state.settings.digitMaxTradesPerSession || 3)) return null;
+
+    if (stats.signal === "EVEN_BIAS") {
+      stats.tradeCooldownUntil = Date.now() + Number(this.state.settings.digitTradeCooldownMs || 10000);
+      return "DIGITEVEN";
+    }
+
+    if (stats.signal === "ODD_BIAS") {
+      stats.tradeCooldownUntil = Date.now() + Number(this.state.settings.digitTradeCooldownMs || 10000);
+      return "DIGITODD";
+    }
+
+    return null;
   }
 
   placeTrade(signal) {
@@ -258,6 +358,16 @@ export class DerivSession {
       market: this.state.settings.market
     };
 
+    const duration =
+      this.state.botMode === "digits"
+        ? Number(this.state.settings.digitDuration || 1)
+        : Number(this.state.settings.duration);
+
+    const durationUnit =
+      this.state.botMode === "digits"
+        ? this.state.settings.digitDurationUnit || "t"
+        : this.state.settings.durationUnit;
+
     this.send({
       buy: 1,
       price: stakeUsed,
@@ -266,8 +376,8 @@ export class DerivSession {
         basis: "stake",
         contract_type: contractType,
         currency: this.state.settings.currency,
-        duration: this.state.settings.duration,
-        duration_unit: this.state.settings.durationUnit,
+        duration,
+        duration_unit: durationUnit,
         symbol: this.state.settings.market
       }
     });
@@ -291,12 +401,19 @@ export class DerivSession {
     return { ok: true, symbol: this.wantedMarket };
   }
 
-  updateSettings({ settings, sizingMode, contractType }) {
+  updateSettings({ settings, sizingMode, contractType, botMode, digitMode }) {
     this.state.settings = { ...this.state.settings, ...settings };
     this.state.sizingMode = sizingMode || this.state.sizingMode;
     this.state.contractType = contractType || this.state.contractType;
+    this.state.botMode = botMode || this.state.botMode;
     this.state.settings.market = settings?.market || this.state.settings.market;
     this.wantedMarket = this.state.settings.market;
+
+    if (digitMode) {
+      this.state.digitStats.mode = digitMode;
+      this.state.digitStats.executableEnabled = digitMode === "executable";
+    }
+
     resetStake(this.state);
   }
 
@@ -328,6 +445,7 @@ export class DerivSession {
     this.state.contractId = null;
     this.state.lastTradeMeta = null;
     this.state.recentTrades = [];
+    this.state.digitStats.tradeCooldownUntil = 0;
     resetStake(this.state);
   }
 
