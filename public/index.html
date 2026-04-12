@@ -152,7 +152,7 @@
           <div class="settingBox"><label for="digitSampleTarget">Analyzer Precision</label><select id="digitSampleTarget"><option value="100" selected>100 Ticks</option><option value="200">200 Ticks</option></select></div>
           <div class="settingBox"><label for="digitBias50Threshold">Bias 50 Threshold</label><input id="digitBias50Threshold" type="number" step="1" value="28" /></div>
           <div class="settingBox"><label for="digitBias100Threshold">Bias 100 Threshold</label><input id="digitBias100Threshold" type="number" step="1" value="55" /></div>
-         <div class="settingBox"><label for="digitTradeCooldownMs">Digit Cooldown (ms)</label><input id="digitTradeCooldownMs" type="number" step="1000" value="10000" /></div>
+          <div class="settingBox"><label for="digitTradeCooldownMs">Digit Cooldown (ms)</label><input id="digitTradeCooldownMs" type="number" step="1000" value="10000" /></div>
           <div class="settingBox"><label for="digitMaxTradesPerSession">Digit Max Trades</label><input id="digitMaxTradesPerSession" type="number" step="1" value="3" /></div>
         </div>
       </div>
@@ -191,7 +191,71 @@
 
       <div class="card glass">
         <h3>Digit Analyzer</h3>
-        <pre id="digitOutput">Waiting...</pre>
+        <div id="digitOutput" class="digitAnalyzer">
+          <div class="digitHero">
+            <div>
+              <div class="digitEyebrow">Mode</div>
+              <div id="digitModeBadge" class="digitBadge">Observer</div>
+            </div>
+            <div>
+              <div class="digitEyebrow">Signal</div>
+              <div id="digitSignalBadge" class="digitSignal neutral">NO TRADE</div>
+            </div>
+          </div>
+
+          <div class="digitGridView">
+            <div class="digitStatBox">
+              <span>Sample</span>
+              <strong id="digitSampleValue">0 / 100</strong>
+            </div>
+            <div class="digitStatBox">
+              <span>Ready</span>
+              <strong id="digitReadyValue2">No</strong>
+            </div>
+            <div class="digitStatBox">
+              <span>Last Digit</span>
+              <strong id="digitLastValue">-</strong>
+            </div>
+            <div class="digitStatBox">
+              <span>Streak</span>
+              <strong id="digitStreakValue">None</strong>
+            </div>
+            <div class="digitStatBox">
+              <span>Even</span>
+              <strong id="digitEvenValue">0</strong>
+            </div>
+            <div class="digitStatBox">
+              <span>Odd</span>
+              <strong id="digitOddValue">0</strong>
+            </div>
+          </div>
+
+          <div class="digitProgressWrap">
+            <div class="digitEyebrow">Readiness</div>
+            <div class="digitProgress">
+              <div id="digitProgressBar" class="digitProgressBar"></div>
+            </div>
+          </div>
+
+          <div class="digitSplit">
+            <div class="digitMiniCard">
+              <div class="digitEyebrow">Last 20 Digits</div>
+              <div id="digitLast20" class="digitChips"></div>
+            </div>
+
+            <div class="digitMiniCard">
+              <div class="digitEyebrow">Rolling Bias</div>
+              <div class="digitBiasRow">
+                <span>50 Tick Even / Odd</span>
+                <strong id="digitRolling50Value">0 / 0</strong>
+              </div>
+              <div class="digitBiasRow">
+                <span>100 Tick Even / Odd</span>
+                <strong id="digitRolling100Value">0 / 0</strong>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 

@@ -255,29 +255,78 @@ function updateStats(snapshot) {
   renderDigitStats(snapshot.digitStats || {}, snapshot.settings || {});
 }
 
+function signalClass(signal) {
+  const s = String(signal || "").toUpperCase();
+  if (s.includes("TRADE") && !s.includes("NO")) return "good";
+  if (s.includes("WAIT") || s.includes("BUILD")) return "warn";
+  if (s.includes("BLOCK") || s.includes("AVOID")) return "bad";
+  return "neutral";
+}
+
 function renderDigitStats(stats, settings) {
   const target = Number(settings.digitSampleTarget || 100);
+  const last20 = (stats.lastDigits || []).slice(-20);
+  const rolling50 = stats.rolling50 || [];
+  const rolling100 = stats.rolling100 || [];
 
   const payload = {
     mode: stats.mode || "observer",
     executableEnabled: Boolean(stats.executableEnabled),
-    sampleSize: stats.sampleSize ?? (stats.lastDigits || []).length,
+    sampleSize: stats.sampleSize ?? last20.length,
     sampleTarget: target,
     sampleReady: Boolean(stats.sampleTargetReached),
     lastDigit: stats.lastDigit ?? null,
-    last20: (stats.lastDigits || []).slice(-20),
+    last20,
     evenCount: stats.evenCount ?? 0,
     oddCount: stats.oddCount ?? 0,
     streakType: stats.streakType || null,
     streakLength: stats.streakLength ?? 0,
-    rolling50Even: (stats.rolling50 || []).filter((d) => d % 2 === 0).length,
-    rolling50Odd: (stats.rolling50 || []).filter((d) => d % 2 !== 0).length,
-    rolling100Even: (stats.rolling100 || []).filter((d) => d % 2 === 0).length,
-    rolling100Odd: (stats.rolling100 || []).filter((d) => d % 2 !== 0).length,
+    rolling50Even: rolling50.filter((d) => d % 2 === 0).length,
+    rolling50Odd: rolling50.filter((d) => d % 2 !== 0).length,
+    rolling100Even: rolling100.filter((d) => d % 2 === 0).length,
+    rolling100Odd: rolling100.filter((d) => d % 2 !== 0).length,
     signal: stats.signal || "NO TRADE"
   };
 
-  digitOutput.textContent = JSON.stringify(payload, null, 2);
+  const digitModeBadge = document.getElementById("digitModeBadge");
+  const digitSignalBadge = document.getElementById("digitSignalBadge");
+  const digitSampleValue = document.getElementById("digitSampleValue");
+  const digitReadyValue2 = document.getElementById("digitReadyValue2");
+  const digitLastValue = document.getElementById("digitLastValue");
+  const digitStreakValue = document.getElementById("digitStreakValue");
+  const digitEvenValue = document.getElementById("digitEvenValue");
+  const digitOddValue = document.getElementById("digitOddValue");
+  const digitProgressBar = document.getElementById("digitProgressBar");
+  const digitLast20 = document.getElementById("digitLast20");
+  const digitRolling50Value = document.getElementById("digitRolling50Value");
+  const digitRolling100Value = document.getElementById("digitRolling100Value");
+
+  digitModeBadge.textContent = payload.mode === "executable" ? "Executable" : "Observer";
+  digitSignalBadge.textContent = payload.signal;
+  digitSignalBadge.className = `digitSignal ${signalClass(payload.signal)}`;
+
+  digitSampleValue.textContent = `${payload.sampleSize} / ${payload.sampleTarget}`;
+  digitReadyValue2.textContent = payload.sampleReady ? "Yes" : "No";
+  digitLastValue.textContent = payload.lastDigit ?? "-";
+  digitStreakValue.textContent = payload.streakType ? `${payload.streakType} x${payload.streakLength}` : "None";
+  digitEvenValue.textContent = String(payload.evenCount);
+  digitOddValue.textContent = String(payload.oddCount);
+  digitRolling50Value.textContent = `${payload.rolling50Even} / ${payload.rolling50Odd}`;
+  digitRolling100Value.textContent = `${payload.rolling100Even} / ${payload.rolling100Odd}`;
+
+  const pct = payload.sampleTarget > 0
+    ? Math.min(100, (payload.sampleSize / payload.sampleTarget) * 100)
+    : 0;
+
+  digitProgressBar.style.width = `${pct}%`;
+
+  digitLast20.innerHTML = "";
+  payload.last20.forEach((digit) => {
+    const chip = document.createElement("span");
+    chip.className = `digitChip ${Number(digit) % 2 === 0 ? "even" : "odd"}`;
+    chip.textContent = String(digit);
+    digitLast20.appendChild(chip);
+  });
 }
 
 function renderTrades(trades) {
@@ -361,9 +410,10 @@ function drawCandles(canvas, candles) {
 function drawMainChart() {
   drawCandles(chartCanvas, selectedCandles);
 
-  if (selectedCandles.length < 2) {
-    chartMeta.textContent = "Waiting for candles...";
+  if (selectedCandles.length < 1) {
+    chartMeta.textContent = `Waiting for candles... selected market: ${marketSelect.value}`;
     moveValue.textContent = "0.000%";
+    moveValue.className = "value";
     return;
   }
 
@@ -405,13 +455,100 @@ function getSettingsPayload() {
     peakDrawdownLock: Number(peakDrawdownLockInput.value),
     digitDuration: Number(digitDurationInput.value),
     digitDurationUnit: digitDurationUnitInput.value,
-    digitSampleTarget: 100(digitSampleTargetInput.value),
+    digitSampleTarget: Number(digitSampleTargetInput.value),
     digitBias50Threshold: Number(digitBias50ThresholdInput.value),
     digitBias100Threshold: Number(digitBias100ThresholdInput.value),
     digitTradeCooldownMs: Number(digitTradeCooldownMsInput.value),
     digitMaxTradesPerSession: Number(digitMaxTradesPerSessionInput.value)
+  
+  
   };
 }
+
+// ✅ helper for API calls
+async function postJson(url, body = {}) {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {
+    data = null;
+  }
+
+  if (!res.ok || (data && data.ok === false)) {
+    const message = data?.error || `Request failed: ${res.status}`;
+    throw new Error(message);
+  }
+
+  return data;
+}
+
+// ✅ save settings + modes before starting bot
+async function saveSettingsAndModes() {
+  allowSettingsSync = true;
+  lastSyncedSettingsJson = "";
+
+  const result = await postJson("/api/settings", {
+    sizingMode: sizingModeSelect.value,
+    botMode: botModeSelect.value,
+    digitMode: digitModeSelect.value,
+    settings: getSettingsPayload()
+  });
+
+  modeSelectionDirty = false;
+  return result;
+}
+
+async function saveSettingsAndModes() {
+  allowSettingsSync = true;
+  lastSyncedSettingsJson = "";
+
+  const result = await postJson("/api/settings", {
+    sizingMode: sizingModeSelect.value,
+    botMode: botModeSelect.value,
+    digitMode: digitModeSelect.value,
+    settings: getSettingsPayload()
+  });
+
+  modeSelectionDirty = false;
+  return result;
+}
+
+startBotBtn.addEventListener("click", async () => {
+  startBotBtn.disabled = true;
+
+  try {
+    addLog("Saving settings...");
+    await saveSettingsAndModes();
+
+    addLog(`Starting ticks for ${marketSelect.value}...`);
+    await postJson("/api/ticks/start", {
+      symbol: marketSelect.value
+    });
+
+    addLog(`Starting bot (${botModeSelect.value}/${digitModeSelect.value})...`);
+    const result = await postJson("/api/bot/start", {
+      sizingMode: sizingModeSelect.value,
+      botMode: botModeSelect.value,
+      digitMode: digitModeSelect.value,
+      settings: getSettingsPayload()
+    });
+
+    addLog(result?.message || "Bot started successfully");
+
+  } catch (err) {
+    addLog(`❌ START FAILED: ${err.message}`);
+    console.error(err);
+  } finally {
+    startBotBtn.disabled = false;
+  }
+});
+
 
 const eventSource = new EventSource("/api/stream");
 
@@ -419,19 +556,41 @@ eventSource.onmessage = (event) => {
   const payload = JSON.parse(event.data);
 
   if (payload.type === "tick") {
-    tickOutput.textContent = JSON.stringify(payload, null, 2);
-    const quote = Number(payload.quote);
-    const symbol = payload.symbol;
+    const tick = payload.data || payload.tick || payload;
+    const quote = Number(tick.quote ?? tick.price ?? tick.close);
+    const symbol = tick.symbol ?? tick.market ?? tick.subscription?.symbol ?? marketSelect.value;
 
-    if (symbol === marketSelect.value) {
+    tickOutput.textContent =
+  `Symbol: ${symbol}\n` +
+  `Quote: ${Number.isFinite(quote) ? quote.toFixed(3) : "-"}\n` +
+  `Time: ${tick.epoch || tick.time || "-"}\n` +
+  `Mode: ${botModeSelect.value}\n` +
+  `Digit Mode: ${digitModeSelect.value}`;
+
+    if (symbol === marketSelect.value && Number.isFinite(quote)) {
       pushCandle(selectedCandles, quote, TICKS_PER_CANDLE_MAIN, 60);
       drawMainChart();
+    } else {
+      addLog(`Tick ignored: symbol=${symbol} selected=${marketSelect.value} quote=${tick.quote ?? tick.price ?? "n/a"}`);
     }
   }
 
   if (payload.type === "snapshot") {
-    snapshotOutput.textContent = JSON.stringify(payload.data, null, 2);
-    updateStats(payload.data);
+    const snap = payload.data || payload.snapshot || payload;
+   snapshotOutput.textContent =
+  `Connected: ${snap.connected ? "Yes" : "No"}\n` +
+  `Authorized: ${snap.authorized ? "Yes" : "No"}\n` +
+  `Running: ${snap.running ? "Yes" : "No"}\n` +
+  `Market: ${snap.market || "-"}\n` +
+  `Signal: ${snap.signal || "-"}\n` +
+  `Balance: ${Number(snap.balance ?? 0).toFixed(2)}\n` +
+  `Session Profit: ${Number(snap.sessionProfit ?? 0).toFixed(2)}\n` +
+  `Trades: ${snap.tradeCount ?? 0}\n` +
+  `Wins: ${snap.wins ?? 0}\n` +
+  `Losses: ${snap.losses ?? 0}\n` +
+  `Bot Mode: ${snap.botMode || "-"}\n` +
+  `Digit Mode: ${snap.digitStats?.mode || "-"}`;
+    updateStats(snap);
   }
 
   if (payload.type === "log") addLog(payload.message);
@@ -548,8 +707,32 @@ startTicksBtn.addEventListener("click", async () => {
 });
 
 startBotBtn.addEventListener("click", async () => {
-  await fetch("/api/bot/start", { method: "POST" });
-  addLog("Bot start requested");
+  startBotBtn.disabled = true;
+
+  try {
+    addLog("Saving settings...");
+    await saveSettingsAndModes();
+
+    addLog(`Starting ticks for ${marketSelect.value}...`);
+    await postJson("/api/ticks/start", {
+      symbol: marketSelect.value
+    });
+
+    addLog(`Starting bot (${botModeSelect.value}/${digitModeSelect.value})...`);
+    const result = await postJson("/api/bot/start", {
+      sizingMode: sizingModeSelect.value,
+      botMode: botModeSelect.value,
+      digitMode: digitModeSelect.value,
+      settings: getSettingsPayload()
+    });
+
+    addLog(result?.message || "Bot started successfully");
+  } catch (err) {
+    addLog(`START FAILED: ${err.message}`);
+    console.error("Bot start failed:", err);
+  } finally {
+    startBotBtn.disabled = false;
+  }
 });
 
 stopBotBtn.addEventListener("click", async () => {

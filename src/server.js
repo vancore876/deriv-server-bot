@@ -266,11 +266,46 @@ app.post("/api/ticks/start", (req, res) => {
 });
 
 app.post("/api/bot/start", (req, res) => {
-  const bot = currentBot(req);
-  bot.session.startBot();
-  bot.session.broadcast("log", { message: "Bot started" });
-  bot.session.broadcast("snapshot", { data: bot.session.snapshot() });
-  res.json({ ok: true });
+  try {
+    const bot = currentBot(req);
+
+    if (req.body?.settings || req.body?.sizingMode || req.body?.botMode || req.body?.digitMode || req.body?.contractType) {
+      bot.session.updateSettings({
+        settings: req.body.settings || {},
+        sizingMode: req.body.sizingMode,
+        contractType: req.body.contractType,
+        botMode: req.body.botMode,
+        digitMode: req.body.digitMode
+      });
+    }
+
+    const snapshotBefore = bot.session.snapshot();
+
+    if (!snapshotBefore.connected) {
+      return res.status(400).json({ ok: false, error: "Connect your Deriv token first" });
+    }
+
+    if (!snapshotBefore.authorized) {
+      return res.status(400).json({ ok: false, error: "Deriv session is not authorized yet" });
+    }
+
+    bot.session.startBot();
+    const snapshotAfter = bot.session.snapshot();
+
+    bot.session.broadcast("log", { message: "Bot started" });
+    bot.session.broadcast("snapshot", { data: snapshotAfter });
+
+    return res.json({
+      ok: true,
+      message: "Bot started",
+      running: snapshotAfter.running
+    });
+  } catch (err) {
+    return res.status(500).json({
+      ok: false,
+      error: err.message || "Failed to start bot"
+    });
+  }
 });
 
 app.post("/api/bot/stop", (req, res) => {
