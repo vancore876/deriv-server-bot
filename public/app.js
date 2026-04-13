@@ -37,6 +37,9 @@ const digitDurationUnitInput = document.getElementById("digitDurationUnit");
 const digitSampleTargetInput = document.getElementById("digitSampleTarget");
 const digitBias50ThresholdInput = document.getElementById("digitBias50Threshold");
 const digitBias100ThresholdInput = document.getElementById("digitBias100Threshold");
+const digitOverUnder50ThresholdInput = document.getElementById("digitOverUnder50Threshold");
+const digitOverUnder100ThresholdInput = document.getElementById("digitOverUnder100Threshold");
+const digitBarrierInput = document.getElementById("digitBarrier");
 const digitTradeCooldownMsInput = document.getElementById("digitTradeCooldownMs");
 const digitMaxTradesPerSessionInput = document.getElementById("digitMaxTradesPerSession");
 
@@ -45,6 +48,7 @@ const disconnectBtn = document.getElementById("disconnectBtn");
 const logoutBtn = document.getElementById("logoutBtn");
 const manualBtn = document.getElementById("manualBtn");
 const adminBtn = document.getElementById("adminBtn");
+const themeToggleBtn = document.getElementById("themeToggleBtn");
 const applyPresetBtn = document.getElementById("applyPresetBtn");
 const startTicksBtn = document.getElementById("startTicksBtn");
 const startBotBtn = document.getElementById("startBotBtn");
@@ -80,6 +84,7 @@ const stakeValue = document.getElementById("stakeValue");
 
 const chartCanvas = document.getElementById("priceChart");
 const chartMeta = document.getElementById("chartMeta");
+const uiVersionValue = document.getElementById("uiVersion");
 
 const selectedCandles = [];
 const TICKS_PER_CANDLE_MAIN = 4;
@@ -88,6 +93,7 @@ let allowSettingsSync = true;
 let lastSyncedSettingsJson = "";
 let expiresAtValue = null;
 let countdownInterval = null;
+const THEME_STORAGE_KEY = "deriv-ui-theme";
 
 adminBtn.style.display = "none";
 
@@ -98,7 +104,8 @@ const allSettingInputs = [
   stopLossInput, takeProfitInput, pauseAfterLossesInput, pauseSecondsInput, maxLossesInput, maxTradesInput,
   reentryBlockSecondsInput, peakDrawdownLockInput, sizingModeSelect, botModeSelect, digitModeSelect,
   digitDurationInput, digitDurationUnitInput, digitSampleTargetInput, digitBias50ThresholdInput,
-  digitBias100ThresholdInput,digitTradeCooldownMsInput,
+  digitBias100ThresholdInput, digitOverUnder50ThresholdInput, digitOverUnder100ThresholdInput, digitBarrierInput,
+  digitTradeCooldownMsInput,
   digitMaxTradesPerSessionInput
 ];
 
@@ -172,6 +179,29 @@ function addLog(message) {
   logOutput.textContent = `[${now}] ${message}\n` + logOutput.textContent;
 }
 
+function applyTheme(theme) {
+  const nextTheme = theme === "light" ? "light" : "dark";
+  document.body.dataset.theme = nextTheme;
+  if (themeToggleBtn) themeToggleBtn.textContent = nextTheme === "light" ? "🌞 Light" : "🌙 Dark";
+  localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
+}
+
+function initTheme() {
+  const stored = localStorage.getItem(THEME_STORAGE_KEY);
+  applyTheme(stored || "dark");
+}
+
+async function loadVersion() {
+  if (!uiVersionValue) return;
+  try {
+    const res = await fetch('/api/version');
+    const data = await res.json();
+    uiVersionValue.textContent = data.version || 'unknown';
+  } catch {
+    uiVersionValue.textContent = 'unavailable';
+  }
+}
+
 function syncSettingsFromSnapshot(settings, snapshot) {
   if (!settings || !allowSettingsSync) return;
 
@@ -215,6 +245,9 @@ function syncSettingsFromSnapshot(settings, snapshot) {
   digitSampleTargetInput.value = String(settings.digitSampleTarget ?? 100);
   digitBias50ThresholdInput.value = settings.digitBias50Threshold ?? 28;
   digitBias100ThresholdInput.value = settings.digitBias100Threshold ?? 55;
+  digitOverUnder50ThresholdInput.value = settings.digitOverUnder50Threshold ?? 28;
+  digitOverUnder100ThresholdInput.value = settings.digitOverUnder100Threshold ?? 55;
+  digitBarrierInput.value = settings.digitBarrier ?? 4;
   digitTradeCooldownMsInput.value = settings.digitTradeCooldownMs ?? 10000;
   digitMaxTradesPerSessionInput.value = settings.digitMaxTradesPerSession ?? 3;
 
@@ -458,6 +491,9 @@ function getSettingsPayload() {
     digitSampleTarget: Number(digitSampleTargetInput.value),
     digitBias50Threshold: Number(digitBias50ThresholdInput.value),
     digitBias100Threshold: Number(digitBias100ThresholdInput.value),
+    digitOverUnder50Threshold: Number(digitOverUnder50ThresholdInput.value),
+    digitOverUnder100Threshold: Number(digitOverUnder100ThresholdInput.value),
+    digitBarrier: Number(digitBarrierInput.value),
     digitTradeCooldownMs: Number(digitTradeCooldownMsInput.value),
     digitMaxTradesPerSession: Number(digitMaxTradesPerSessionInput.value)
   
@@ -488,7 +524,6 @@ async function postJson(url, body = {}) {
   return data;
 }
 
-// ✅ save settings + modes before starting bot
 async function saveSettingsAndModes() {
   allowSettingsSync = true;
   lastSyncedSettingsJson = "";
@@ -500,55 +535,8 @@ async function saveSettingsAndModes() {
     settings: getSettingsPayload()
   });
 
-  modeSelectionDirty = false;
   return result;
 }
-
-async function saveSettingsAndModes() {
-  allowSettingsSync = true;
-  lastSyncedSettingsJson = "";
-
-  const result = await postJson("/api/settings", {
-    sizingMode: sizingModeSelect.value,
-    botMode: botModeSelect.value,
-    digitMode: digitModeSelect.value,
-    settings: getSettingsPayload()
-  });
-
-  modeSelectionDirty = false;
-  return result;
-}
-
-startBotBtn.addEventListener("click", async () => {
-  startBotBtn.disabled = true;
-
-  try {
-    addLog("Saving settings...");
-    await saveSettingsAndModes();
-
-    addLog(`Starting ticks for ${marketSelect.value}...`);
-    await postJson("/api/ticks/start", {
-      symbol: marketSelect.value
-    });
-
-    addLog(`Starting bot (${botModeSelect.value}/${digitModeSelect.value})...`);
-    const result = await postJson("/api/bot/start", {
-      sizingMode: sizingModeSelect.value,
-      botMode: botModeSelect.value,
-      digitMode: digitModeSelect.value,
-      settings: getSettingsPayload()
-    });
-
-    addLog(result?.message || "Bot started successfully");
-
-  } catch (err) {
-    addLog(`❌ START FAILED: ${err.message}`);
-    console.error(err);
-  } finally {
-    startBotBtn.disabled = false;
-  }
-});
-
 
 const eventSource = new EventSource("/api/stream");
 
@@ -623,6 +611,13 @@ manualBtn.addEventListener("click", () => {
 adminBtn.addEventListener("click", () => {
   window.location.href = "/admin";
 });
+
+if (themeToggleBtn) {
+  themeToggleBtn.addEventListener("click", () => {
+    const next = document.body.dataset.theme === "dark" ? "light" : "dark";
+    applyTheme(next);
+  });
+}
 
 applyPresetBtn.addEventListener("click", async () => {
   allowSettingsSync = true;
@@ -771,3 +766,5 @@ window.addEventListener("resize", () => {
 
 checkAuth();
 loadRole();
+initTheme();
+loadVersion();

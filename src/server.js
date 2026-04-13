@@ -20,6 +20,13 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const IS_PROD = process.env.NODE_ENV === "production";
+const SESSION_SECRET = process.env.SESSION_SECRET;
+const UI_VERSION = process.env.UI_VERSION || "2026.04.13";
+
+if (IS_PROD && !SESSION_SECRET) {
+  throw new Error("SESSION_SECRET is required in production");
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -30,13 +37,13 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use(
   session({
-    secret: process.env.SESSION_SECRET || "change-this-secret-now",
+    secret: SESSION_SECRET || "dev-only-change-this-secret-now",
     resave: false,
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
       sameSite: "lax",
-      secure: false,
+      secure: IS_PROD,
       maxAge: 1000 * 60 * 60 * 24 * 7
     }
   })
@@ -126,7 +133,7 @@ app.post("/auth/signup", redirectIfLoggedIn, async (req, res) => {
       return res.status(400).json({ ok: false, error: "Password must be at least 6 characters" });
     }
 
-    const role = listUsers().length === 0 || username === "vancore36" ? "admin" : "user";
+    const role = listUsers().length === 0 ? "admin" : "user";
     const user = await createUser(username, password, { role });
 
     req.session.user = {
@@ -201,6 +208,13 @@ app.get("/api/health", (req, res) => {
     app: "deriv-multi-user-bot",
     user: req.currentUser.username,
     role: req.currentUser.role
+  });
+});
+
+app.get("/api/version", (req, res) => {
+  res.json({
+    ok: true,
+    version: UI_VERSION
   });
 });
 
