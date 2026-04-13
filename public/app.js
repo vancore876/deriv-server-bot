@@ -81,6 +81,11 @@ const winsValue = document.getElementById("winsValue");
 const lossesValue = document.getElementById("lossesValue");
 const lossStreakValue = document.getElementById("lossStreakValue");
 const stakeValue = document.getElementById("stakeValue");
+const gameLevelValue = document.getElementById("gameLevelValue");
+const gameXpValue = document.getElementById("gameXpValue");
+const gameXpBar = document.getElementById("gameXpBar");
+const gameMissionText = document.getElementById("gameMissionText");
+const gameMissionProgress = document.getElementById("gameMissionProgress");
 
 const chartCanvas = document.getElementById("priceChart");
 const chartMeta = document.getElementById("chartMeta");
@@ -315,9 +320,41 @@ function updateStats(snapshot) {
   analyzerReadyValue.textContent = ready ? "Yes" : "No";
   analyzerReadyValue.className = "value " + (ready ? "good" : "");
 
+  updateGameProgress(snapshot);
+
   syncSettingsFromSnapshot(snapshot.settings, snapshot);
   renderTrades(snapshot.recentTrades || []);
   renderDigitStats(snapshot.digitStats || {}, snapshot.settings || {});
+}
+
+function updateGameProgress(snapshot) {
+  if (!gameLevelValue || !gameXpValue || !gameXpBar) return;
+
+  const wins = Number(snapshot.wins || 0);
+  const losses = Number(snapshot.losses || 0);
+  const tradeCount = Number(snapshot.tradeCount || 0);
+
+  const xp = Math.max(0, (wins * 30) + (tradeCount * 5) - (losses * 10));
+  const levels = [0, 150, 400, 800, 1400, 2200, 3200];
+
+  let level = 1;
+  for (let i = 0; i < levels.length; i += 1) {
+    if (xp >= levels[i]) level = i + 1;
+  }
+
+  const currentFloor = levels[Math.max(0, level - 1)] || 0;
+  const nextCeil = levels[Math.min(level, levels.length - 1)] || levels[levels.length - 1];
+  const span = Math.max(1, nextCeil - currentFloor);
+  const progress = Math.max(0, Math.min(100, ((xp - currentFloor) / span) * 100));
+
+  gameLevelValue.textContent = String(level);
+  gameXpValue.textContent = `${xp} / ${nextCeil}`;
+  gameXpBar.style.width = `${progress}%`;
+
+  const missionTarget = 5;
+  const missionProgress = Math.min(missionTarget, wins);
+  gameMissionText.textContent = "Win 5 trades";
+  gameMissionProgress.textContent = `${missionProgress} / ${missionTarget}`;
 }
 
 function signalClass(signal) {

@@ -101,6 +101,54 @@ body {
   color: var(--muted);
 }
 
+.gameCard {
+  border: 1px solid rgba(250, 204, 21, 0.35);
+  box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.1), 0 18px 36px rgba(0, 0, 0, 0.28);
+}
+
+.gameRow {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 0.95rem;
+}
+
+.gameBar {
+  height: 10px;
+  width: 100%;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.25);
+  overflow: hidden;
+  margin: 8px 0 14px;
+}
+
+.gameBarFill {
+  width: 0%;
+  height: 100%;
+  background: linear-gradient(90deg, #22c55e, #38bdf8, #facc15);
+  transition: width 220ms ease;
+}
+
+.gameMission {
+  border: 1px dashed var(--card-border);
+  border-radius: 10px;
+  padding: 10px;
+  background: rgba(15, 23, 42, 0.25);
+}
+
+.gameMissionTitle {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.gameMissionProgress {
+  margin-top: 6px;
+  font-weight: 700;
+}
+
 .hero p {
   margin: 0;
   color: var(--muted);
