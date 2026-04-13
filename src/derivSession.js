@@ -51,11 +51,14 @@ function buildFreshDigitStats(previous = {}) {
     counts: { 0:0,1:0,2:0,3:0,4:0,5:0,6:0,7:0,8:0,9:0 },
     evenCount: 0,
     oddCount: 0,
+    overCount: 0,
+    underCount: 0,
     streakType: null,
     streakLength: 0,
     rolling50: [],
     rolling100: [],
     biasScore: 0,
+    overUnderEdge: 0,
     signal: "NO TRADE",
     mode: previous.mode || "observer",
     executableEnabled: Boolean(previous.executableEnabled),
@@ -77,11 +80,16 @@ function updateDigitStats(state, quote) {
   stats.counts = { 0:0,1:0,2:0,3:0,4:0,5:0,6:0,7:0,8:0,9:0 };
   stats.evenCount = 0;
   stats.oddCount = 0;
+  stats.overCount = 0;
+  stats.underCount = 0;
+  const barrier = Math.max(0, Math.min(9, Number(state.settings.digitBarrier ?? 4)));
 
   for (const d of stats.lastDigits) {
     stats.counts[d] += 1;
     if (d % 2 === 0) stats.evenCount += 1;
     else stats.oddCount += 1;
+    if (d > barrier) stats.overCount += 1;
+    else stats.underCount += 1;
   }
 
   stats.rolling50 = stats.lastDigits.slice(-50);
@@ -103,19 +111,30 @@ function updateDigitStats(state, quote) {
   const odd50 = stats.rolling50.length - even50;
   const even100 = stats.rolling100.filter((d) => d % 2 === 0).length;
   const odd100 = stats.rolling100.length - even100;
+  const over50 = stats.rolling50.filter((d) => d > barrier).length;
+  const under50 = stats.rolling50.length - over50;
+  const over100 = stats.rolling100.filter((d) => d > barrier).length;
+  const under100 = stats.rolling100.length - over100;
 
   stats.biasScore = Math.abs(even50 - odd50);
+  stats.overUnderEdge = Math.abs(over50 - under50);
   stats.signal = "NO TRADE";
 
   if (!stats.sampleTargetReached) return;
 
   const bias50 = Number(state.settings.digitBias50Threshold || 30);
   const bias100 = Number(state.settings.digitBias100Threshold || 58);
+  const overUnder50 = Number(state.settings.digitOverUnder50Threshold || 30);
+  const overUnder100 = Number(state.settings.digitOverUnder100Threshold || 58);
 
   if (even50 >= bias50 && even100 >= bias100 && stats.streakType !== "EVEN") {
     stats.signal = "EVEN_BIAS";
   } else if (odd50 >= bias50 && odd100 >= bias100 && stats.streakType !== "ODD") {
     stats.signal = "ODD_BIAS";
+  } else if (over50 >= overUnder50 && over100 >= overUnder100 && digit <= barrier) {
+    stats.signal = "OVER_BIAS";
+  } else if (under50 >= overUnder50 && under100 >= overUnder100 && digit > barrier) {
+    stats.signal = "UNDER_BIAS";
   }
 }
 
@@ -343,7 +362,8 @@ export class DerivSession {
     const executable = mode === "executable" && Boolean(stats.executableEnabled);
 
     const target = Number(this.state.settings.digitSampleTarget || 100);
-    this.state.lastSignalText = `Digit: ${stats.signal} | ${stats.sampleSize}/${target} | Bias ${stats.biasScore}`;
+    const barrier = Math.max(0, Math.min(9, Number(this.state.settings.digitBarrier ?? 4)));
+    this.state.lastSignalText = `Digit: ${stats.signal} | ${stats.sampleSize}/${target} | EO ${stats.biasScore} OU ${stats.overUnderEdge} @${barrier}`;
 
     if (!executable) return null;
     if (!stats.sampleTargetReached) return null;
@@ -359,6 +379,16 @@ export class DerivSession {
     if (stats.signal === "ODD_BIAS") {
       stats.tradeCooldownUntil = Date.now() + Number(this.state.settings.digitTradeCooldownMs || 10000);
       return "DIGITODD";
+    }
+
+    if (stats.signal === "OVER_BIAS") {
+      stats.tradeCooldownUntil = Date.now() + Number(this.state.settings.digitTradeCooldownMs || 10000);
+      return "DIGITOVER";
+    }
+
+    if (stats.signal === "UNDER_BIAS") {
+      stats.tradeCooldownUntil = Date.now() + Number(this.state.settings.digitTradeCooldownMs || 10000);
+      return "DIGITUNDER";
     }
 
     return null;
@@ -392,18 +422,24 @@ export class DerivSession {
         ? this.state.settings.digitDurationUnit || "t"
         : this.state.settings.durationUnit;
 
+    const parameters = {
+      amount: stakeUsed,
+      basis: "stake",
+      contract_type: contractType,
+      currency: this.state.settings.currency,
+      duration,
+      duration_unit: durationUnit,
+      symbol: this.state.settings.market
+    };
+
+    if (contractType === "DIGITOVER" || contractType === "DIGITUNDER") {
+      parameters.barrier = String(Math.max(0, Math.min(9, Number(this.state.settings.digitBarrier ?? 4))));
+    }
+
     this.send({
       buy: 1,
       price: stakeUsed,
-      parameters: {
-        amount: stakeUsed,
-        basis: "stake",
-        contract_type: contractType,
-        currency: this.state.settings.currency,
-        duration,
-        duration_unit: durationUnit,
-        symbol: this.state.settings.market
-      }
+      parameters
     });
 
     this.broadcast("log", {

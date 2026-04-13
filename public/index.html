@@ -9,9 +9,13 @@
 <body>
   <div class="wrap">
     <div class="hero">
-      <div>
-        <h1>Deriv Server Bot ✨</h1>
-        <p>Live dashboard with private user session, charts, digit analyzer, trade tracking, P&amp;L, and reset tools.</p>
+      <div class="heroTop">
+        <div>
+          <h1>Deriv Server Bot ✨</h1>
+          <p>Live dashboard with private user session, charts, digit analyzer, trade tracking, P&amp;L, and reset tools.</p>
+          <p class="heroHint">Build: <span id="uiVersion">loading...</span></p>
+        </div>
+        <button id="themeToggleBtn" class="themeBtn" type="button">🌙 Dark</button>
       </div>
     </div>
 
@@ -152,6 +156,9 @@
           <div class="settingBox"><label for="digitSampleTarget">Analyzer Precision</label><select id="digitSampleTarget"><option value="100" selected>100 Ticks</option><option value="200">200 Ticks</option></select></div>
           <div class="settingBox"><label for="digitBias50Threshold">Bias 50 Threshold</label><input id="digitBias50Threshold" type="number" step="1" value="28" /></div>
           <div class="settingBox"><label for="digitBias100Threshold">Bias 100 Threshold</label><input id="digitBias100Threshold" type="number" step="1" value="55" /></div>
+          <div class="settingBox"><label for="digitOverUnder50Threshold">Over/Under 50 Threshold</label><input id="digitOverUnder50Threshold" type="number" step="1" value="28" /></div>
+          <div class="settingBox"><label for="digitOverUnder100Threshold">Over/Under 100 Threshold</label><input id="digitOverUnder100Threshold" type="number" step="1" value="55" /></div>
+          <div class="settingBox"><label for="digitBarrier">Over/Under Barrier</label><input id="digitBarrier" type="number" min="0" max="9" step="1" value="4" /></div>
           <div class="settingBox"><label for="digitTradeCooldownMs">Digit Cooldown (ms)</label><input id="digitTradeCooldownMs" type="number" step="1000" value="10000" /></div>
           <div class="settingBox"><label for="digitMaxTradesPerSession">Digit Max Trades</label><input id="digitMaxTradesPerSession" type="number" step="1" value="3" /></div>
         </div>
