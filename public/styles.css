@@ -82,6 +82,25 @@ body {
   font-size: 0.9rem;
 }
 
+.buildPill {
+  display: inline-block;
+  margin-left: 0.4rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  background: rgba(80, 160, 255, 0.24);
+  color: var(--text);
+  border: 1px solid rgba(125, 180, 255, 0.5);
+}
+
+.updateNotice {
+  margin-top: 0.45rem !important;
+  font-size: 0.82rem !important;
+  color: var(--muted);
+}
+
 .hero p {
   margin: 0;
   color: var(--muted);

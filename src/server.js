@@ -27,7 +27,7 @@ const openJarvis = AI_ENABLED ? new OpenJarvisCopilot() : null;
 const PORT = process.env.PORT || 3000;
 const IS_PROD = process.env.NODE_ENV === "production";
 const SESSION_SECRET = process.env.SESSION_SECRET;
-const UI_VERSION = process.env.UI_VERSION || "2026.04.13";
+const UI_VERSION = process.env.UI_VERSION || "2026.04.13-r2";
 
 if (IS_PROD && !SESSION_SECRET) {
   throw new Error("SESSION_SECRET is required in production");

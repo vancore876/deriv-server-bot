@@ -207,7 +207,9 @@ async function loadVersion() {
   try {
     const res = await fetch('/api/version');
     const data = await res.json();
-    uiVersionValue.textContent = data.version || 'unknown';
+    const version = data.version || 'unknown';
+    uiVersionValue.textContent = version;
+    document.title = `Deriv Server Bot (Updated UI ${version})`;
     const aiEnabled = data.aiEnabled !== false;
     configureAiVisibility(aiEnabled);
   } catch {
