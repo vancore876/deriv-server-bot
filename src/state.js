@@ -58,6 +58,9 @@ export const state = {
     maxLosses: 5,
     maxTrades: 35,
     reentryBlockSeconds: 30,
-    peakDrawdownLock: 0.8
+    peakDrawdownLock: 0.8,
+    digitOverUnder50Threshold: 30,
+    digitOverUnder100Threshold: 58,
+    digitBarrier: 4
   }
 };

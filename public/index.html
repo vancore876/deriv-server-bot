@@ -9,9 +9,13 @@
 <body>
   <div class="wrap">
     <div class="hero">
-      <div>
-        <h1>Deriv Server Bot ✨</h1>
-        <p>Live dashboard with private user session, charts, digit analyzer, trade tracking, P&amp;L, and reset tools.</p>
+      <div class="heroTop">
+        <div>
+          <h1>Deriv Server Bot ✨</h1>
+          <p>Live dashboard with private user session, charts, digit analyzer, trade tracking, P&amp;L, and reset tools.</p>
+          <p class="heroHint">Build: <span id="uiVersion">loading...</span></p>
+        </div>
+        <button id="themeToggleBtn" class="themeBtn" type="button">🌙 Dark</button>
       </div>
     </div>
 
@@ -104,6 +108,9 @@
         <button class="tabBtn" data-tab="strategyTab">Strategy Settings</button>
         <button class="tabBtn" data-tab="riskTab">Risk Settings</button>
         <button class="tabBtn" data-tab="digitTab">Digit Analyzer</button>
+        <button class="tabBtn" data-tab="copilotTab" data-ai-section="true">Copilot</button>
+        <button class="tabBtn" data-tab="memoryTab" data-ai-section="true">Memory</button>
+        <button class="tabBtn" data-tab="experimentsTab" data-ai-section="true">Experiments</button>
       </div>
 
       <div id="tradeTab" class="tabPanel active">
@@ -152,11 +159,48 @@
           <div class="settingBox"><label for="digitSampleTarget">Analyzer Precision</label><select id="digitSampleTarget"><option value="100" selected>100 Ticks</option><option value="200">200 Ticks</option></select></div>
           <div class="settingBox"><label for="digitBias50Threshold">Bias 50 Threshold</label><input id="digitBias50Threshold" type="number" step="1" value="28" /></div>
           <div class="settingBox"><label for="digitBias100Threshold">Bias 100 Threshold</label><input id="digitBias100Threshold" type="number" step="1" value="55" /></div>
+          <div class="settingBox"><label for="digitOverUnder50Threshold">Over/Under 50 Threshold</label><input id="digitOverUnder50Threshold" type="number" step="1" value="28" /></div>
+          <div class="settingBox"><label for="digitOverUnder100Threshold">Over/Under 100 Threshold</label><input id="digitOverUnder100Threshold" type="number" step="1" value="55" /></div>
+          <div class="settingBox"><label for="digitBarrier">Over/Under Barrier</label><input id="digitBarrier" type="number" min="0" max="9" step="1" value="4" /></div>
           <div class="settingBox"><label for="digitTradeCooldownMs">Digit Cooldown (ms)</label><input id="digitTradeCooldownMs" type="number" step="1000" value="10000" /></div>
           <div class="settingBox"><label for="digitMaxTradesPerSession">Digit Max Trades</label><input id="digitMaxTradesPerSession" type="number" step="1" value="3" /></div>
         </div>
       </div>
 
+
+      <div id="copilotTab" class="tabPanel" data-ai-section="true">
+        <div class="settingsGrid singleCol">
+          <div class="settingBox">
+            <label for="copilotQueryInput">Ask OpenJarvis</label>
+            <input id="copilotQueryInput" type="text" placeholder="Why did I lose today?" />
+            <div class="row">
+              <button id="copilotAskBtn" class="secondaryBtn">Ask Copilot</button>
+              <button id="strategyReviewBtn" class="secondaryBtn">Run Strategy Review</button>
+            </div>
+            <pre id="copilotOutput">Copilot ready.</pre>
+          </div>
+        </div>
+      </div>
+
+      <div id="memoryTab" class="tabPanel" data-ai-section="true">
+        <div class="settingsGrid singleCol">
+          <div class="settingBox">
+            <label>Memory Insights</label>
+            <button id="memoryRefreshBtn" class="secondaryBtn">Refresh Memory</button>
+            <pre id="memoryOutput">No memory insights yet.</pre>
+          </div>
+        </div>
+      </div>
+
+      <div id="experimentsTab" class="tabPanel" data-ai-section="true">
+        <div class="settingsGrid singleCol">
+          <div class="settingBox">
+            <label>Experiment Suggestions</label>
+            <button id="experimentsRefreshBtn" class="secondaryBtn">Load Experiments</button>
+            <pre id="experimentsOutput">No experiments loaded.</pre>
+          </div>
+        </div>
+      </div>
       <div class="row">
         <button id="saveSettingsBtn" class="secondaryBtn">Save Settings</button>
         <button id="loadMarketBtn" class="secondaryBtn">Load Selected Market</button>
@@ -260,6 +304,11 @@
     </div>
 
     <div class="grid lowerGrid">
+      <div class="card glass" data-ai-section="true">
+        <h3>AI Insight</h3>
+        <pre id="aiInsightOutput">Waiting for AI insights...</pre>
+      </div>
+
       <div class="card glass">
         <h3>Recent Trades</h3>
         <table>
@@ -278,10 +327,17 @@
           <tbody id="tradesTableBody"></tbody>
         </table>
       </div>
+    </div>
 
+    <div class="grid lowerGrid">
       <div class="card glass">
         <h3>Log</h3>
         <pre id="logOutput">Waiting...</pre>
+      </div>
+
+      <div class="card glass" data-ai-section="true">
+        <h3>OpenClaw Events</h3>
+        <pre id="aiEventsOutput">No AI events yet.</pre>
       </div>
     </div>
 

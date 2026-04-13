@@ -15,11 +15,23 @@ import {
 } from "./authStore.js";
 import { getUserBot } from "./botRegistry.js";
 import { presets } from "./presets.js";
+import { OpenClawOrchestrator, OpenJarvisCopilot } from "./agents/index.js";
 
 dotenv.config();
 
+
 const app = express();
+const AI_ENABLED = process.env.ENABLE_AI !== "false";
+const openClaw = AI_ENABLED ? new OpenClawOrchestrator() : null;
+const openJarvis = AI_ENABLED ? new OpenJarvisCopilot() : null;
 const PORT = process.env.PORT || 3000;
+const IS_PROD = process.env.NODE_ENV === "production";
+const SESSION_SECRET = process.env.SESSION_SECRET;
+const UI_VERSION = process.env.UI_VERSION || "2026.04.13";
+
+if (IS_PROD && !SESSION_SECRET) {
+  throw new Error("SESSION_SECRET is required in production");
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -27,16 +39,20 @@ const PUBLIC_DIR = path.join(__dirname, "..", "public");
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use((req, res, next) => {
+  res.setHeader("Cache-Control", "no-store, max-age=0");
+  next();
+});
 
 app.use(
   session({
-    secret: process.env.SESSION_SECRET || "change-this-secret-now",
+    secret: SESSION_SECRET || "dev-only-change-this-secret-now",
     resave: false,
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
       sameSite: "lax",
-      secure: false,
+      secure: IS_PROD,
       maxAge: 1000 * 60 * 60 * 24 * 7
     }
   })
@@ -126,7 +142,7 @@ app.post("/auth/signup", redirectIfLoggedIn, async (req, res) => {
       return res.status(400).json({ ok: false, error: "Password must be at least 6 characters" });
     }
 
-    const role = listUsers().length === 0 || username === "vancore36" ? "admin" : "user";
+    const role = listUsers().length === 0 ? "admin" : "user";
     const user = await createUser(username, password, { role });
 
     req.session.user = {
@@ -188,12 +204,38 @@ app.get("/", requireAuth, (req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, "index.html"));
 });
 
-app.use(express.static(PUBLIC_DIR));
+app.use(express.static(PUBLIC_DIR, {
+  etag: false,
+  setHeaders: (res) => {
+    res.setHeader("Cache-Control", "no-store, max-age=0");
+  }
+}));
 app.use("/api", requireApiAuth);
 
 function currentBot(req) {
   return getUserBot(req.currentUser.username);
 }
+function buildAiSnapshot(req) {
+  const bot = currentBot(req);
+  return bot.session.snapshot();
+}
+
+function runAi(req) {
+  if (!AI_ENABLED || !openClaw) return null;
+  const snapshot = buildAiSnapshot(req);
+  return {
+    snapshot,
+    insights: openClaw.run(snapshot)
+  };
+}
+
+function requireAiEnabled(req, res, next) {
+  if (!AI_ENABLED) {
+    return res.status(404).json({ ok: false, error: "AI gateway is disabled" });
+  }
+  next();
+}
+
 
 app.get("/api/health", (req, res) => {
   res.json({
@@ -201,6 +243,83 @@ app.get("/api/health", (req, res) => {
     app: "deriv-multi-user-bot",
     user: req.currentUser.username,
     role: req.currentUser.role
+  });
+});
+
+app.get("/api/version", (req, res) => {
+  res.json({
+    ok: true,
+    version: UI_VERSION,
+    aiEnabled: AI_ENABLED
+  });
+});
+
+app.post("/api/copilot/query", requireAiEnabled, (req, res) => {
+  const aiResult = runAi(req);
+  const { snapshot, insights } = aiResult;
+  const query = String(req.body?.query || "");
+  const reply = openJarvis.answer({ query, context: insights });
+  const payload = { query, reply, generatedAt: new Date().toISOString() };
+
+  const bot = currentBot(req);
+  bot.session.broadcast("copilot_reply", { data: payload });
+
+  res.json({ ok: true, ...payload, context: {
+    regime: insights.regime,
+    risk: insights.risk,
+    strategy: insights.strategy,
+    session: insights.session,
+    market: snapshot.market
+  } });
+});
+
+app.get("/api/strategy/review", requireAiEnabled, (req, res) => {
+  const aiResult = runAi(req);
+  const { insights } = aiResult;
+  const bot = currentBot(req);
+  bot.session.broadcast("strategy_insight", { data: insights.strategy });
+  bot.session.broadcast("risk_alert", { data: insights.risk });
+  res.json({
+    ok: true,
+    strategy: insights.strategy,
+    risk: insights.risk,
+    regime: insights.regime,
+    session: insights.session
+  });
+});
+
+app.get("/api/memory/insights", requireAiEnabled, (req, res) => {
+  const aiResult = runAi(req);
+  const { insights } = aiResult;
+  const bot = currentBot(req);
+  bot.session.broadcast("memory_update", { data: insights.memory });
+  res.json({ ok: true, memory: insights.memory, generatedAt: insights.generatedAt });
+});
+
+app.get("/api/experiments", requireAiEnabled, (req, res) => {
+  const aiResult = runAi(req);
+  const { insights } = aiResult;
+  const recommendations = [
+    {
+      id: "exp-cooldown-tighten",
+      title: "Cooldown Stress Test",
+      hypothesis: "Increasing cooldown reduces drawdown in chop.",
+      action: "Raise cooldownMs by 20% for next 10 trades.",
+      guardrail: "Abort if 3 consecutive losses."
+    },
+    {
+      id: "exp-digit-gating",
+      title: "Digit Gate Validation",
+      hypothesis: "Higher Over/Under threshold improves signal quality.",
+      action: "Increase digitOverUnder100Threshold by +3 for one session.",
+      guardrail: "Disable if win rate falls below 45%."
+    }
+  ];
+
+  res.json({
+    ok: true,
+    regime: insights.regime,
+    experiments: recommendations
   });
 });
 
